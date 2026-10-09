@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "Main window of Antigravity Switcher",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default"
+  ]
+}

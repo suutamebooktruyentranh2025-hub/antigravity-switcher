@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Antigravity Switcher</title>
+    <script>
+      (function () {
+        var saved = localStorage.getItem("accounts_color_scheme");
+        var mode = saved === "light" || saved === "dark" || saved === "system" ? saved : "dark";
+        var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var resolved = mode === "light" || (mode === "system" && !systemDark) ? "light" : "dark";
+        document.documentElement.setAttribute("data-color-scheme", resolved);
+        document.documentElement.lang = localStorage.getItem("accounts_locale") === "en" ? "en" : "vi";
+        var preset = localStorage.getItem("accounts_theme_preset");
+        var presets = ["violet","catppuccin","tokyonight","nord","sepia","oled","dracula","github","onedark","rosepine","emerald","cyberpunk"];
+        if (presets.indexOf(preset) >= 0) {
+          document.documentElement.setAttribute("data-theme", preset);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

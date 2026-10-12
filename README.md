@@ -13,10 +13,25 @@ File cài có dạng `Antigravity Switcher_0.1.0_aarch64.dmg` trên máy Apple S
 3. Tháo đĩa (eject), rồi mở app từ `/Applications`.
 4. Lần đầu macOS có thể chặn app. Bấm phải vào app, chọn **Open**, rồi xác nhận **Open**.
 5. Nếu vẫn bị chặn, vào **System Settings → Privacy & Security** và chọn **Open Anyway**.
+6. Nếu app vẫn không mở được, chạy lệnh sau trong Terminal rồi mở lại app:
+
+```bash
+sudo xattr -rd com.apple.quarantine "/Applications/Antigravity Switcher.app"
+```
 
 App build trên máy local chưa được Apple notarize, nên Gatekeeper hỏi ở lần mở đầu tiên.
 
 Cửa sổ đóng lại thì app vẫn chạy trên thanh menu. Thoát hẳn bằng menu chuột phải, mục **Thoát**.
+
+## Cài từ file EXE
+
+File cài có dạng `Antigravity Switcher_0.1.0_x64-setup.exe`. Số phiên bản đổi theo `version` trong dự án.
+
+1. Chạy file `setup.exe`.
+2. Nếu SmartScreen cảnh báo, chỉ tiếp tục khi bạn tin nguồn file. Chọn **More info**, rồi **Run anyway**. Nhãn nút có thể khác tùy phiên bản Windows.
+3. Làm theo trình cài. App xuất hiện trong Start menu.
+
+Bản EXE chưa được Microsoft ký, nên SmartScreen có thể hiện cảnh báo này ở lần chạy đầu.
 
 ## Build từ mã nguồn
 
@@ -137,13 +152,7 @@ File cài nằm tại:
 src-tauri\target\release\bundle\nsis\Antigravity Switcher_0.1.0_x64-setup.exe
 ```
 
-Trên máy Windows ARM, hậu tố là `arm64` thay vì `x64`.
-
-Cài EXE:
-
-1. Chạy file `setup.exe`.
-2. Nếu SmartScreen báo app chưa được nhận diện, chọn **More info**, rồi **Run anyway**.
-3. Làm theo trình cài. App xuất hiện trong Start menu.
+Trên máy Windows ARM, hậu tố là `arm64` thay vì `x64`. Cách cài và cách xử lý cảnh báo SmartScreen nằm ở mục **Cài từ file EXE**.
 
 Bản EXE mở được cửa sổ app. Thao tác chuyển tài khoản trong Antigravity IDE vẫn gọi đường dẫn, Keychain và lệnh của macOS, nên chưa chạy trên Windows.
 

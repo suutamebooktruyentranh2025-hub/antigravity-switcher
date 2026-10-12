@@ -15,6 +15,7 @@ import {
   switchAccount,
 } from "./api";
 import { COLOR_SCHEME_STORAGE_KEY, readColorScheme, resolveColorScheme, type ColorScheme, type ResolvedScheme } from "./colorScheme";
+import { copyLinkMessageKey, copyLinkPhaseAfterWrite, type CopyLinkPhase } from "./copyLink";
 import { DEFAULT_THEME_PRESET, THEME_PRESET_STORAGE_KEY, THEME_PRESETS, readThemePreset } from "./themePresets";
 import {
   LOCALE_STORAGE_KEY,
@@ -116,6 +117,7 @@ export function App() {
   const [relaunch_account_id, setRelaunchAccountId] = useState<string | null>(null);
   const [add_open, setAddOpen] = useState(false);
   const [oauth_url, setOauthUrl] = useState("");
+  const [copy_link_phase, setCopyLinkPhase] = useState<CopyLinkPhase>("idle");
   const [oauth_notice, setOauthNotice] = useState<{ key: MessageKey } | { text: string } | null>(null);
   const [oauth_failed, setOauthFailed] = useState(false);
   const [delete_target, setDeleteTarget] = useState<AccountRecord | null>(null);
@@ -143,6 +145,7 @@ export function App() {
       setAddOpen(false);
       setOauthUrl("");
       setOauthNotice(null);
+      setCopyLinkPhase("idle");
       await reload();
     } catch (error) {
       oauth_active_ref.current = true;
@@ -305,9 +308,19 @@ export function App() {
     }
   }
 
+  async function onCopyOauthLink() {
+    try {
+      await navigator.clipboard.writeText(oauth_url);
+      setCopyLinkPhase(copyLinkPhaseAfterWrite(true));
+    } catch {
+      setCopyLinkPhase(copyLinkPhaseAfterWrite(false));
+    }
+  }
+
   async function onStartOAuth() {
     setOauthFailed(false);
     setOauthNotice({ key: "oauth_opening" });
+    setCopyLinkPhase("idle");
     setAddOpen(true);
     try {
       const started = await startOAuthLogin();
@@ -517,8 +530,8 @@ export function App() {
             {oauth_url ? <div className="link-box">{oauth_url}</div> : null}
             {oauth_message ? <p className={oauth_failed ? "error-text" : "muted"}>{oauth_message}</p> : null}
             <div className="dialog-actions">
-              <button className="action-button" onClick={() => { oauth_active_ref.current = false; setAddOpen(false); }}>{t("close")}</button>
-              <button className="action-button" disabled={!oauth_url} onClick={() => void navigator.clipboard.writeText(oauth_url)}>{t("copy_link")}</button>
+              <button className="action-button" onClick={() => { oauth_active_ref.current = false; setCopyLinkPhase("idle"); setAddOpen(false); }}>{t("close")}</button>
+              <button className={copy_link_phase === "copied" ? "action-button copied" : "action-button"} disabled={!oauth_url} aria-live="polite" onClick={() => void onCopyOauthLink()}>{t(copyLinkMessageKey(copy_link_phase))}</button>
               <button className="action-button primary" disabled={!oauth_url} onClick={() => { oauth_active_ref.current = true; void onFinishOAuth(); }}>{t("signed_in")}</button>
             </div>
           </div>

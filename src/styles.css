@@ -185,6 +185,11 @@ button, input { font: inherit; }
   color: var(--accent-text);
 }
 
+.action-button.copied {
+  border-color: var(--success-line);
+  color: var(--success-text);
+}
+
 .action-button.danger, .card-button.danger {
   background: var(--danger-bg);
   border-color: var(--danger-line);

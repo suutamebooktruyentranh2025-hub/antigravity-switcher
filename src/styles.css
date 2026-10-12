@@ -410,6 +410,10 @@ button, input { font: inherit; }
   max-height: min(760px, calc(100vh - 32px));
 }
 
+.app-version {
+  text-align: center;
+}
+
 .field-label {
   margin: 0;
   font-size: 11px;

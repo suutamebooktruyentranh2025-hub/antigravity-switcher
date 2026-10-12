@@ -1,5 +1,7 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { visibleAppVersion } from "./appVersion";
 import type { AccountRecord } from "./filterAccounts";
 
 export interface AccountList {
@@ -69,6 +71,17 @@ export function parseCommandError(error: unknown): CommandError {
     // Plain string errors from the host stay as-is.
   }
   return { code: "error", message: raw };
+}
+
+export async function readAppVersion(): Promise<string | null> {
+  if (!tauriReady()) {
+    return null;
+  }
+  try {
+    return visibleAppVersion(await getVersion());
+  } catch {
+    return null;
+  }
 }
 
 export async function setUiLocale(locale: string): Promise<void> {

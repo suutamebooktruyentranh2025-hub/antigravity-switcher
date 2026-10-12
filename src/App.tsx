@@ -3,6 +3,7 @@ import {
   deleteAccount,
   finishOAuthLogin,
   listAccounts,
+  readAppVersion,
   listenAccountsChanged,
   listenOAuthCallback,
   listenSwitchPhase,
@@ -111,6 +112,7 @@ export function App() {
   const [locale, setLocale] = useState<Locale>(storedLocale);
   const [system_dark, setSystemDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
   const [settings_open, setSettingsOpen] = useState(false);
+  const [app_version, setAppVersion] = useState<string | null>(null);
   const [busy_switch_id, setBusySwitchId] = useState<string | null>(null);
   const [switch_phase, setSwitchPhase] = useState<string | null>(null);
   const [refreshing_id, setRefreshingId] = useState<string | null>(null);
@@ -159,6 +161,7 @@ export function App() {
   finish_oauth_ref.current = onFinishOAuth;
 
   useEffect(() => {
+    void readAppVersion().then(setAppVersion);
     void reload();
     const timer = window.setInterval(() => setNowMs(Date.now()), 30000);
     let unlisten_phase = () => {};
@@ -518,6 +521,7 @@ export function App() {
             <div className="dialog-actions">
               <button className="action-button" onClick={() => setSettingsOpen(false)}>{t("close")}</button>
             </div>
+            {app_version ? <p className="muted app-version">{t("app_version", { version: app_version })}</p> : null}
           </div>
         </div>
       ) : null}

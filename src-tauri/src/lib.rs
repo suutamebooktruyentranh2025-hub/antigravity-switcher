@@ -7,6 +7,7 @@ mod session;
 mod switcher;
 mod tray;
 mod scheduler;
+mod updater;
 
 use tauri::WindowEvent;
 
@@ -36,7 +37,10 @@ pub fn run() {
             commands::delete_account,
             commands::set_ui_locale,
             commands::get_auto_check_quota,
-            commands::set_auto_check_quota
+            commands::set_auto_check_quota,
+            commands::check_for_updates,
+            commands::download_update,
+            commands::install_update_and_relaunch
         ])
         .run(tauri::generate_context!())
         .expect("Antigravity Switcher dừng vì lỗi.");

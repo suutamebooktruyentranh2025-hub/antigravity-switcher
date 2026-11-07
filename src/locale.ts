@@ -86,6 +86,16 @@ const vi_messages = {
   auto_check_quota: "Tự động kiểm tra hạn mức mỗi giờ",
   auto_check_quota_desc: "Tự động làm mới hạn mức của tài khoản đang dùng và cảnh báo khi còn ≤ 5%",
   quota_critical_warning: "Hạn mức 5H của tài khoản này sắp hết (≤ 5%). Hãy đổi tài khoản.",
+  check_for_updates: "Kiểm tra cập nhật",
+  checking_for_updates: "Đang kiểm tra...",
+  already_latest_version: "Bạn đang ở phiên bản mới nhất",
+  update_available: "Đã có phiên bản mới {version}",
+  update_now: "Cập nhật ngay",
+  update_later: "Để sau",
+  update_downloading: "Đang tải bản cập nhật... ({percent}%)",
+  update_installing: "Đang cài đặt và khởi động lại...",
+  update_failed: "Cập nhật không thành công: {error}",
+  release_notes: "Thông tin cập nhật",
 } as const;
 
 const en_messages: { [Key in keyof typeof vi_messages]: string } = {
@@ -172,6 +182,16 @@ const en_messages: { [Key in keyof typeof vi_messages]: string } = {
   auto_check_quota: "Auto-check quota hourly",
   auto_check_quota_desc: "Automatically refresh active account quota and warn when ≤ 5%",
   quota_critical_warning: "5H quota for this account is almost exhausted (≤ 5%). Consider switching.",
+  check_for_updates: "Check for updates",
+  checking_for_updates: "Checking for updates...",
+  already_latest_version: "You are on the latest version",
+  update_available: "New version {version} is available",
+  update_now: "Update now",
+  update_later: "Later",
+  update_downloading: "Downloading update... ({percent}%)",
+  update_installing: "Installing and restarting...",
+  update_failed: "Update failed: {error}",
+  release_notes: "Release notes",
 };
 
 export type MessageKey = keyof typeof vi_messages;

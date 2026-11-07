@@ -195,3 +195,67 @@ export async function setAutoCheckQuota(enabled: boolean): Promise<void> {
   }
   return invoke("set_auto_check_quota", { enabled });
 }
+
+export interface UpdateCheckResult {
+  has_update: boolean;
+  current_version: string;
+  remote_version: string;
+  download_url: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  changelog: string;
+  release_date: string;
+  release_url: string;
+}
+
+export interface UpdateProgress {
+  percent: number;
+  downloaded: number;
+  total: number;
+}
+
+export async function checkForUpdates(): Promise<UpdateCheckResult> {
+  if (!tauriReady()) {
+    return {
+      has_update: false,
+      current_version: "0.1.2",
+      remote_version: "0.1.2",
+      download_url: null,
+      file_name: null,
+      file_size: null,
+      changelog: "",
+      release_date: "",
+      release_url: "",
+    };
+  }
+  return invoke<UpdateCheckResult>("check_for_updates");
+}
+
+export async function downloadUpdate(
+  downloadUrl: string,
+  fileName: string,
+): Promise<string> {
+  if (!tauriReady()) {
+    return "/tmp/preview-installer.dmg";
+  }
+  return invoke<string>("download_update", {
+    downloadUrl,
+    fileName,
+  });
+}
+
+export async function installUpdateAndRelaunch(filePath: string): Promise<void> {
+  if (!tauriReady()) {
+    return;
+  }
+  return invoke("install_update_and_relaunch", { filePath });
+}
+
+export async function listenUpdateProgress(
+  handler: (progress: UpdateProgress) => void,
+): Promise<UnlistenFn> {
+  if (!tauriReady()) {
+    return () => {};
+  }
+  return listen<UpdateProgress>("update-progress", (event) => handler(event.payload));
+}

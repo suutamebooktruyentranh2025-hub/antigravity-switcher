@@ -260,6 +260,21 @@ pub fn set_auto_check_quota(enabled: bool, state: State<'_, AppState>) -> Result
     store.write_auto_check_quota(enabled)
 }
 
+#[tauri::command(async)]
+pub fn check_for_updates() -> Result<crate::updater::UpdateCheckResult, String> {
+    crate::updater::check_for_updates()
+}
+
+#[tauri::command(async)]
+pub fn download_update(app: AppHandle, download_url: String, file_name: String) -> Result<String, String> {
+    crate::updater::download_update(&app, &download_url, &file_name)
+}
+
+#[tauri::command(async)]
+pub fn install_update_and_relaunch(file_path: String) -> Result<(), String> {
+    crate::updater::install_update_and_relaunch(&file_path)
+}
+
 fn accept_oauth_callback(
     listener: TcpListener,
     expected_state: String,

@@ -14,9 +14,12 @@ import {
   setUiLocale,
   getAutoCheckQuota,
   setAutoCheckQuota,
+  checkForUpdates,
+  type UpdateCheckResult,
   startOAuthLogin,
   switchAccount,
 } from "./api";
+import { UpdateModal } from "./UpdateModal";
 import { COLOR_SCHEME_STORAGE_KEY, readColorScheme, resolveColorScheme, type ColorScheme, type ResolvedScheme } from "./colorScheme";
 import { copyLinkMessageKey, copyLinkPhaseAfterWrite, type CopyLinkPhase } from "./copyLink";
 import { DEFAULT_THEME_PRESET, THEME_PRESET_STORAGE_KEY, THEME_PRESETS, readThemePreset } from "./themePresets";
@@ -127,6 +130,9 @@ export function App() {
   const [oauth_failed, setOauthFailed] = useState(false);
   const [delete_target, setDeleteTarget] = useState<AccountRecord | null>(null);
   const [auto_check_quota, setAutoCheckQuotaState] = useState(true);
+  const [update_info, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [checking_update, setCheckingUpdate] = useState(false);
+  const [update_check_notice, setUpdateCheckNotice] = useState<string | null>(null);
   const [now_ms, setNowMs] = useState(() => Date.now());
   const oauth_active_ref = useRef(false);
   const oauth_finishing_ref = useRef(false);
@@ -167,6 +173,11 @@ export function App() {
   useEffect(() => {
     void readAppVersion().then(setAppVersion);
     void getAutoCheckQuota().then(setAutoCheckQuotaState);
+    void checkForUpdates().then((res) => {
+      if (res.has_update) {
+        setUpdateInfo(res);
+      }
+    }).catch(() => {});
     void reload();
     const timer = window.setInterval(() => setNowMs(Date.now()), 30000);
     let unlisten_phase = () => {};
@@ -277,6 +288,23 @@ export function App() {
   async function onToggleAutoCheck(enabled: boolean) {
     setAutoCheckQuotaState(enabled);
     await setAutoCheckQuota(enabled);
+  }
+
+  async function onManualCheckUpdates() {
+    setCheckingUpdate(true);
+    setUpdateCheckNotice(null);
+    try {
+      const res = await checkForUpdates();
+      if (res.has_update) {
+        setUpdateInfo(res);
+      } else {
+        setUpdateCheckNotice(t("already_latest_version"));
+      }
+    } catch (err) {
+      setUpdateCheckNotice(String(err));
+    } finally {
+      setCheckingUpdate(false);
+    }
   }
 
   async function onSwitch(account_id: string) {
@@ -550,7 +578,18 @@ export function App() {
             <div className="dialog-actions">
               <button className="action-button" onClick={() => setSettingsOpen(false)}>{t("close")}</button>
             </div>
-            {app_version ? <p className="muted app-version">{t("app_version", { version: app_version })}</p> : null}
+            <div className="update-check-row">
+              {app_version ? <span className="muted app-version">{t("app_version", { version: app_version })}</span> : null}
+              <button
+                type="button"
+                className="check-update-button"
+                disabled={checking_update}
+                onClick={() => void onManualCheckUpdates()}
+              >
+                {checking_update ? t("checking_for_updates") : t("check_for_updates")}
+              </button>
+            </div>
+            {update_check_notice ? <p className="muted update-check-notice">{update_check_notice}</p> : null}
           </div>
         </div>
       ) : null}
@@ -582,6 +621,14 @@ export function App() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {update_info && update_info.has_update ? (
+        <UpdateModal
+          update_info={update_info}
+          locale={locale}
+          onClose={() => setUpdateInfo(null)}
+        />
       ) : null}
     </main>
   );

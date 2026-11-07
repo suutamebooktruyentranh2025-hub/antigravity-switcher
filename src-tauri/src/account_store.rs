@@ -23,6 +23,8 @@ pub struct AccountRecord {
     pub last_used_at: Option<String>,
     pub needs_relogin: bool,
     pub last_error: Option<String>,
+    #[serde(default)]
+    pub tier_downgraded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -136,6 +138,7 @@ impl<V: TokenVault> AccountStore<V> {
             last_used_at: None,
             needs_relogin: false,
             last_error: None,
+            tier_downgraded: false,
         };
         self.write_record(&created)?;
         index.ordered_ids.push(account_id);

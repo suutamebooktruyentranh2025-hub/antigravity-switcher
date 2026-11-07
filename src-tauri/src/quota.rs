@@ -34,6 +34,21 @@ pub fn normalize_tier(raw_tier: &str) -> Option<String> {
     None
 }
 
+fn tier_rank(tier: Option<&str>) -> u8 {
+    match tier.map(str::to_uppercase).as_deref() {
+        Some("ULTRA") => 3,
+        Some("PRO") => 2,
+        Some("FREE") => 1,
+        _ => 0,
+    }
+}
+
+pub fn is_tier_downgrade(old_tier: Option<&str>, new_tier: Option<&str>) -> bool {
+    let old_rank = tier_rank(old_tier);
+    let new_rank = tier_rank(new_tier);
+    old_rank >= 2 && new_rank < old_rank
+}
+
 pub fn classify_refresh_failure(status_code: Option<u16>, body_text: &str) -> RefreshFailure {
     let lower_body = body_text.to_lowercase();
     let needs_relogin = status_code == Some(401)
@@ -485,5 +500,18 @@ mod tests {
             },
         ];
         assert!(has_critical_quota(&rows_critical));
+    }
+
+    #[test]
+    fn test_is_tier_downgrade() {
+        assert!(is_tier_downgrade(Some("PRO"), Some("FREE")));
+        assert!(is_tier_downgrade(Some("PRO"), None));
+        assert!(is_tier_downgrade(Some("ULTRA"), Some("PRO")));
+        assert!(is_tier_downgrade(Some("ULTRA"), Some("FREE")));
+
+        assert!(!is_tier_downgrade(Some("FREE"), Some("PRO")));
+        assert!(!is_tier_downgrade(Some("FREE"), Some("FREE")));
+        assert!(!is_tier_downgrade(None, Some("FREE")));
+        assert!(!is_tier_downgrade(Some("PRO"), Some("PRO")));
     }
 }

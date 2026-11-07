@@ -115,25 +115,43 @@ fn switch_from_tray(app: AppHandle, account_id: String) {
     SWITCH_IN_PROGRESS.store(false, Ordering::SeqCst);
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum WarningReason {
+    NeedsRelogin,
+    TierDowngraded,
+    CriticalQuota,
+}
+
+pub fn account_warning_status(record: &crate::account_store::AccountRecord) -> Option<WarningReason> {
+    if record.needs_relogin {
+        Some(WarningReason::NeedsRelogin)
+    } else if record.tier_downgraded {
+        Some(WarningReason::TierDowngraded)
+    } else if crate::quota::has_critical_quota(&record.quota) {
+        Some(WarningReason::CriticalQuota)
+    } else {
+        None
+    }
+}
+
 fn apply_menu(app: &AppHandle) -> Result<(), String> {
-    let (account_rows, current_account_id, current_is_critical) = {
+    let (account_rows, current_account_id, current_warning) = {
         let state = app.state::<AppState>();
         let store = state.store.lock().map_err(|error| error.to_string())?;
         let current_account_id = store.current_account_id().unwrap_or(None);
-        let current_is_critical = current_account_id
+        let current_warning = current_account_id
             .as_deref()
             .and_then(|id| store.read_record(id).ok())
-            .map(|record| crate::quota::has_critical_quota(&record.quota))
-            .unwrap_or(false);
+            .and_then(|record| account_warning_status(&record));
         let account_rows = store
             .list_accounts()
             .unwrap_or_default()
             .into_iter()
             .map(|record| (record.id, record.email, record.needs_relogin))
             .collect::<Vec<_>>();
-        (account_rows, current_account_id, current_is_critical)
+        (account_rows, current_account_id, current_warning)
     };
-    update_tray_icon_state(app, current_is_critical);
+    update_tray_icon_state(app, current_warning);
     let copy = tray_copy(&ui_locale(app));
 
     let show_item = MenuItem::with_id(app, "show", copy.show, true, None::<&str>).map_err(|error| error.to_string())?;
@@ -180,8 +198,9 @@ fn menu_label(email: &str, needs_relogin: bool, relogin_suffix: &str) -> String 
     }
 }
 
-pub fn update_tray_icon_state(app: &AppHandle, is_warning: bool) {
+pub fn update_tray_icon_state(app: &AppHandle, warning: Option<WarningReason>) {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let is_warning = warning.is_some();
         let icon_bytes: &[u8] = if is_warning {
             include_bytes!("../icons/warning-32x32.png")
         } else {
@@ -191,14 +210,29 @@ pub fn update_tray_icon_state(app: &AppHandle, is_warning: bool) {
             let _ = tray.set_icon(Some(img));
         }
         let locale = ui_locale(app);
-        let tooltip = if is_warning {
-            if locale == "en" {
-                "Antigravity Switcher: 5H quota low (≤ 5%), please switch account!"
-            } else {
-                "Antigravity Switcher: Hạn mức 5H sắp hết (≤ 5%), vui lòng đổi tài khoản!"
+        let tooltip = match warning {
+            Some(WarningReason::NeedsRelogin) => {
+                if locale == "en" {
+                    "Antigravity Switcher: Current account expired, please sign in again!"
+                } else {
+                    "Antigravity Switcher: Tài khoản hiện tại đã hết hạn, vui lòng đăng nhập lại!"
+                }
             }
-        } else {
-            "Antigravity Switcher"
+            Some(WarningReason::TierDowngraded) => {
+                if locale == "en" {
+                    "Antigravity Switcher: Current account tier was downgraded to FREE!"
+                } else {
+                    "Antigravity Switcher: Tài khoản hiện tại đã bị hạ cấp xuống FREE!"
+                }
+            }
+            Some(WarningReason::CriticalQuota) => {
+                if locale == "en" {
+                    "Antigravity Switcher: 5H quota low (≤ 5%), please switch account!"
+                } else {
+                    "Antigravity Switcher: Hạn mức 5H sắp hết (≤ 5%), vui lòng đổi tài khoản!"
+                }
+            }
+            None => "Antigravity Switcher",
         };
         let _ = tray.set_tooltip(Some(tooltip));
     }

@@ -8,6 +8,7 @@ mod switcher;
 mod tray;
 mod scheduler;
 mod updater;
+mod notify;
 
 use tauri::WindowEvent;
 

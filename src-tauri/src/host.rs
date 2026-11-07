@@ -357,9 +357,18 @@ pub fn apply_quota_refresh<V: TokenVault>(
         .into_iter()
         .find(|item| item.id == account_id)
         .ok_or_else(|| format!("Không thấy tài khoản {account_id}."))?;
+    let previous_needs_relogin = record.needs_relogin;
+    let old_tier = record.tier.clone();
+
     let refresh_token = match store.load_refresh_token(account_id) {
         Ok(token) => token,
         Err(error) => {
+            if !previous_needs_relogin {
+                crate::notify::send_notification(
+                    "Antigravity Switcher",
+                    &format!("⚠️ Phiên đăng nhập của tài khoản {} đã hết hạn. Vui lòng đăng nhập lại!", record.email),
+                );
+            }
             record.needs_relogin = true;
             record.last_error = Some(error);
             store.save_record(&record)?;
@@ -369,6 +378,12 @@ pub fn apply_quota_refresh<V: TokenVault>(
     let fresh_session = match refresh_access_session(&refresh_token) {
         Ok(session) => session,
         Err(RefreshFailure::Relogin(message)) => {
+            if !previous_needs_relogin {
+                crate::notify::send_notification(
+                    "Antigravity Switcher",
+                    &format!("⚠️ Phiên đăng nhập của tài khoản {} đã hết hạn. Vui lòng đăng nhập lại!", record.email),
+                );
+            }
             record.needs_relogin = true;
             record.last_error = Some(message);
             store.save_record(&record)?;
@@ -382,9 +397,20 @@ pub fn apply_quota_refresh<V: TokenVault>(
     };
     store.save_refresh_token(account_id, &fresh_session.refresh_token)?;
     match fetch_quota_snapshot(&fresh_session.access_token) {
-        Ok((quota_rows, tier)) => {
+        Ok((quota_rows, new_tier)) => {
+            if crate::quota::is_tier_downgrade(old_tier.as_deref(), new_tier.as_deref()) {
+                record.tier_downgraded = true;
+                let old = old_tier.as_deref().unwrap_or("PRO");
+                let new = new_tier.as_deref().unwrap_or("FREE");
+                crate::notify::send_notification(
+                    "Antigravity Switcher",
+                    &format!("⚠️ Cảnh báo: Tài khoản {} đã bị hạ cấp gói cước ({} → {})! Vui lòng kiểm tra lại gói Google.", record.email, old, new),
+                );
+            } else if new_tier.as_deref() == Some("PRO") || new_tier.as_deref() == Some("ULTRA") {
+                record.tier_downgraded = false;
+            }
             record.quota = quota_rows;
-            record.tier = tier;
+            record.tier = new_tier;
             record.quota_refreshed_at = Some(chrono::Utc::now().to_rfc3339());
             record.needs_relogin = false;
             record.last_error = None;
@@ -393,6 +419,12 @@ pub fn apply_quota_refresh<V: TokenVault>(
             let failure = classify_refresh_failure(None, &error);
             match failure {
                 RefreshFailure::Relogin(message) => {
+                    if !previous_needs_relogin {
+                        crate::notify::send_notification(
+                            "Antigravity Switcher",
+                            &format!("⚠️ Phiên đăng nhập của tài khoản {} đã hết hạn. Vui lòng đăng nhập lại!", record.email),
+                        );
+                    }
                     record.needs_relogin = true;
                     record.last_error = Some(message);
                 }

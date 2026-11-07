@@ -18,6 +18,7 @@ export interface AccountRecord {
   last_used_at: string | null;
   needs_relogin: boolean;
   last_error: string | null;
+  tier_downgraded?: boolean;
 }
 
 export interface TierCounts {

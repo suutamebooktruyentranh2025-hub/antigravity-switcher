@@ -5,6 +5,7 @@ import {
   listAccounts,
   readAppVersion,
   listenAccountsChanged,
+  listenRefreshingAccount,
   listenOAuthCallback,
   listenSwitchPhase,
   parseCommandError,
@@ -183,11 +184,17 @@ export function App() {
     let unlisten_phase = () => {};
     let unlisten_oauth = () => {};
     let unlisten_accounts = () => {};
+    let unlisten_refreshing = () => {};
     void listenSwitchPhase((event) => {
       setBusySwitchId(event.account_id);
       setSwitchPhase(event.phase);
     }).then((stop) => {
       unlisten_phase = stop;
+    });
+    void listenRefreshingAccount((accountId) => {
+      setRefreshingId(accountId);
+    }).then((stop) => {
+      unlisten_refreshing = stop;
     });
     void listenAccountsChanged(() => {
       setBusySwitchId(null);
@@ -206,6 +213,7 @@ export function App() {
       unlisten_phase();
       unlisten_oauth();
       unlisten_accounts();
+      unlisten_refreshing();
     };
   }, []);
 

@@ -294,19 +294,15 @@ pub fn install_update_and_relaunch(file_path: &str) -> Result<(), String> {
         // Xóa thuộc tính cách ly (quarantine) để Gatekeeper không chặn phiên bản mới
         let _ = Command::new("xattr").args(["-cr", &dest_app]).status();
 
-        // Đợi tiến trình hiện tại thoát hoàn toàn rồi mới khởi chạy phiên bản mới qua `open`
+        // Đợi tiến trình hiện tại thoát hoàn toàn rồi mới khởi chạy phiên bản mới qua `open -n`
         let current_pid = std::process::id();
-        let relaunch_script = format!(
-            "while kill -0 {current_pid} 2>/dev/null; do sleep 0.1; done; sleep 0.3; open \"{dest_app}\""
+        let relaunch_cmd = format!(
+            "nohup sh -c 'while kill -0 {current_pid} 2>/dev/null; do sleep 0.1; done; sleep 0.2; /usr/bin/open -n \"{dest_app}\"' >/dev/null 2>&1 &"
         );
 
-        Command::new("sh")
-            .args(["-c", &relaunch_script])
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Lỗi tạo tiến trình khởi động lại: {e}"))?;
+        let _ = Command::new("sh")
+            .args(["-c", &relaunch_cmd])
+            .status();
 
         std::process::exit(0);
     }

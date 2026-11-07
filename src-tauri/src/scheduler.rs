@@ -22,9 +22,10 @@ pub fn start_hourly_quota_worker(app: AppHandle) {
 pub fn check_and_refresh_current_account(app: &AppHandle) {
     let state = app.state::<AppState>();
     let (enabled, current_account_id) = {
-        let Ok(store) = state.store.lock() else {
+        let Ok(mut store) = state.store.lock() else {
             return;
         };
+        let _ = store.align_current_account(crate::host::logged_in_refresh_token().as_deref());
         let enabled = store.read_auto_check_quota();
         let current_id = store.current_account_id().unwrap_or(None);
         (enabled, current_id)
@@ -38,13 +39,20 @@ pub fn check_and_refresh_current_account(app: &AppHandle) {
         return;
     };
 
+    let _ = app.emit("refreshing-account", Some(&account_id));
+
     let refresh_result = {
         let mut store = match state.store.lock() {
             Ok(s) => s,
-            Err(_) => return,
+            Err(_) => {
+                let _ = app.emit("refreshing-account", None::<String>);
+                return;
+            }
         };
         apply_quota_refresh(&mut store, &account_id)
     };
+
+    let _ = app.emit("refreshing-account", None::<String>);
 
     if let Ok(record) = refresh_result {
         let is_warning = has_critical_quota(&record.quota);

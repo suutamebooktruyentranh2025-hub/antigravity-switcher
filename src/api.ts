@@ -163,6 +163,13 @@ export async function listenAccountsChanged(handler: () => void): Promise<Unlist
   return listen("accounts-changed", () => handler());
 }
 
+export async function listenRefreshingAccount(handler: (accountId: string | null) => void): Promise<UnlistenFn> {
+  if (!tauriReady()) {
+    return () => {};
+  }
+  return listen<string | null>("refreshing-account", (event) => handler(event.payload));
+}
+
 export async function listenOAuthCallback(handler: () => void): Promise<UnlistenFn> {
   if (!tauriReady()) {
     return () => {};

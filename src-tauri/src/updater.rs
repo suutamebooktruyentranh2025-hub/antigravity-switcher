@@ -277,15 +277,37 @@ pub fn install_update_and_relaunch(file_path: &str) -> Result<(), String> {
         if std::path::Path::new(&dest_app).exists() {
             let _ = Command::new("rm").args(["-rf", &dest_app]).status();
         }
-        let cp_status = Command::new("cp").args(["-R", &src_app, "/Applications/"]).status();
+        let cp_res = Command::new("cp").args(["-R", &src_app, "/Applications/"]).status();
 
         let _ = Command::new("hdiutil").args(["detach", &mount_point, "-quiet"]).status();
 
-        if let Err(e) = cp_status {
-            return Err(format!("Lỗi copy ứng dụng vào /Applications: {e}"));
+        match cp_res {
+            Ok(status) if !status.success() => {
+                return Err("Không thể copy ứng dụng mới vào /Applications".into());
+            }
+            Err(e) => {
+                return Err(format!("Lỗi copy ứng dụng vào /Applications: {e}"));
+            }
+            _ => {}
         }
 
-        let _ = Command::new("open").args(["-a", &dest_app]).status();
+        // Xóa thuộc tính cách ly (quarantine) để Gatekeeper không chặn phiên bản mới
+        let _ = Command::new("xattr").args(["-cr", &dest_app]).status();
+
+        // Đợi tiến trình hiện tại thoát hoàn toàn rồi mới khởi chạy phiên bản mới qua `open`
+        let current_pid = std::process::id();
+        let relaunch_script = format!(
+            "while kill -0 {current_pid} 2>/dev/null; do sleep 0.1; done; sleep 0.3; open \"{dest_app}\""
+        );
+
+        Command::new("sh")
+            .args(["-c", &relaunch_script])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| format!("Lỗi tạo tiến trình khởi động lại: {e}"))?;
+
         std::process::exit(0);
     }
 
@@ -293,9 +315,13 @@ pub fn install_update_and_relaunch(file_path: &str) -> Result<(), String> {
     {
         use std::process::Command;
         Command::new(file_path)
-            .arg("/S")
+            .args(["/S", "--updated"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
             .map_err(|e| format!("Lỗi khởi chạy bộ cài đặt: {e}"))?;
+        std::thread::sleep(std::time::Duration::from_millis(500));
         std::process::exit(0);
     }
 

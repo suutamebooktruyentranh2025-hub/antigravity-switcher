@@ -76,7 +76,11 @@ export function rowsForWindow(account: AccountRecord, quota_window: QuotaWindow)
 }
 
 export function isAccountCritical(account: AccountRecord): boolean {
-  return account.quota.some((q) => q.window === "5h" && q.percent_remaining <= 5);
+  const rows_5h = account.quota.filter((q) => q.window === "5h");
+  if (rows_5h.length === 0) {
+    return false;
+  }
+  return rows_5h.every((q) => q.percent_remaining <= 5);
 }
 
 export function formatResetCountdown(reset_at: string, now_ms: number): string {

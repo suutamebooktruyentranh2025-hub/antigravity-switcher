@@ -90,7 +90,7 @@ describe("account filters", () => {
     expect(formatResetCountdown("2026-10-10T16:00:00Z", now_ms)).toBe("1d 4h");
   });
 
-  it("detects critical quota when any 5h model has <= 5% remaining", () => {
+  it("detects critical quota only when all 5h models have <= 5% remaining", () => {
     const safe_account: AccountRecord = {
       id: "safe",
       email: "safe@example.com",
@@ -107,10 +107,22 @@ describe("account filters", () => {
     };
     expect(isAccountCritical(safe_account)).toBe(false);
 
+    // 1 model 5h hết hạn mức nhưng 1 model 5h khác còn hạn mức -> KHÔNG cảnh báo
+    const mixed_account: AccountRecord = {
+      ...safe_account,
+      quota: [
+        { model_name: "Flash", window: "5h", percent_remaining: 0, reset_at: "2026-10-09T16:00:00Z" },
+        { model_name: "Pro", window: "5h", percent_remaining: 50, reset_at: "2026-10-09T16:00:00Z" },
+      ],
+    };
+    expect(isAccountCritical(mixed_account)).toBe(false);
+
+    // TẤT CẢ các model 5h đều <= 5% -> Có cảnh báo
     const critical_account: AccountRecord = {
       ...safe_account,
       quota: [
         { model_name: "Flash", window: "5h", percent_remaining: 5, reset_at: "2026-10-09T16:00:00Z" },
+        { model_name: "Pro", window: "5h", percent_remaining: 2, reset_at: "2026-10-09T16:00:00Z" },
       ],
     };
     expect(isAccountCritical(critical_account)).toBe(true);

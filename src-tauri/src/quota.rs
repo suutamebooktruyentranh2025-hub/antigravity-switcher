@@ -284,9 +284,11 @@ fn group_quota_rows(groups: &[SummaryGroup]) -> Vec<QuotaRow> {
 }
 
 pub fn has_critical_quota(quota_rows: &[QuotaRow]) -> bool {
-    quota_rows
-        .iter()
-        .any(|row| row.window == "5h" && row.percent_remaining <= 5)
+    let rows_5h: Vec<&QuotaRow> = quota_rows.iter().filter(|row| row.window == "5h").collect();
+    if rows_5h.is_empty() {
+        return false;
+    }
+    rows_5h.iter().all(|row| row.percent_remaining <= 5)
 }
 
 #[cfg(test)]
@@ -450,11 +452,35 @@ mod tests {
         ];
         assert!(!has_critical_quota(&rows_safe));
 
+        // Mixed: 1 model 5h hết hạn mức (0%), nhưng 1 model 5h khác còn 50% -> KHÔNG cảnh báo
+        let rows_mixed = vec![
+            QuotaRow {
+                model_name: "Gemini 3 Flash".into(),
+                window: "5h".into(),
+                percent_remaining: 0,
+                reset_at: "2026-11-07T18:00:00Z".into(),
+            },
+            QuotaRow {
+                model_name: "Claude Sonnet 4.6".into(),
+                window: "5h".into(),
+                percent_remaining: 50,
+                reset_at: "2026-11-07T18:00:00Z".into(),
+            },
+        ];
+        assert!(!has_critical_quota(&rows_mixed));
+
+        // Critical: TẤT CẢ các model 5h đều <= 5% -> Có cảnh báo
         let rows_critical = vec![
             QuotaRow {
                 model_name: "Gemini 3 Flash".into(),
                 window: "5h".into(),
                 percent_remaining: 5,
+                reset_at: "2026-11-07T18:00:00Z".into(),
+            },
+            QuotaRow {
+                model_name: "Claude Sonnet 4.6".into(),
+                window: "5h".into(),
+                percent_remaining: 2,
                 reset_at: "2026-11-07T18:00:00Z".into(),
             },
         ];

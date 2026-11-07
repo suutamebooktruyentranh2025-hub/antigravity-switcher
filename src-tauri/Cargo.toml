@@ -1,6 +1,6 @@
 [package]
 name = "antigravity-switcher"
-version = "0.1.4"
+version = "0.1.5"
 description = "Switch Antigravity accounts on macOS"
 authors = ["javora"]
 edition = "2021"

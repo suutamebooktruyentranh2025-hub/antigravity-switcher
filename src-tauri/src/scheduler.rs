@@ -8,6 +8,10 @@ use crate::tray::update_tray_icon_state;
 
 pub fn start_hourly_quota_worker(app: AppHandle) {
     std::thread::spawn(move || {
+        // Kiểm tra hạn mức ngay sau khi mở ứng dụng 2 giây để luôn có dữ liệu mới nhất
+        std::thread::sleep(Duration::from_secs(2));
+        check_and_refresh_current_account(&app);
+
         loop {
             std::thread::sleep(Duration::from_secs(3600));
             check_and_refresh_current_account(&app);
@@ -45,6 +49,7 @@ pub fn check_and_refresh_current_account(app: &AppHandle) {
     if let Ok(record) = refresh_result {
         let is_warning = has_critical_quota(&record.quota);
         update_tray_icon_state(app, is_warning);
+        crate::tray::refresh(app);
         let _ = app.emit("accounts-changed", ());
     }
 }

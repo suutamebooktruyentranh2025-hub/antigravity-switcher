@@ -6,8 +6,11 @@ Phiên bản **v0.1.3** mang đến hai nâng cấp quan trọng: **Cơ chế t�
 
 ## 🌟 Tính năng mới nổi bật (Highlights)
 
-### 1. Tự Động Kiểm Tra Hạn Mức Mỗi Giờ & Cảnh Báo Khay Hệ Thống (Hourly Quota Check & Tray Warning)
-* **Tiến trình ngầm độc lập ở tầng Rust:** Tự động gọi API lấy hạn mức mới nhất của tài khoản đang dùng mỗi 60 phút mà không phụ thuộc vào Webview JavaScript.
+### 1. Tự Động Kiểm Tra Hạn Mức Ngay Khi Mở Ứng Dụng & Định Kỳ Mỗi Giờ (Startup & Hourly Quota Check)
+* **Tiến trình ngầm độc lập ở tầng Rust:**
+  - Tự động kiểm tra hạn mức mới nhất của tài khoản đang dùng ngay sau khi mở ứng dụng (sau 2 giây khởi động) để luôn phản ánh số liệu thực tế mà không làm nghẽn giao diện.
+  - Tự động duy trì kiểm tra định kỳ mỗi 60 phút khi ứng dụng đang chạy.
+  - Tự động kích hoạt kiểm tra ngay khi người dùng bật tính năng trong Cài đặt.
 * **Cảnh báo khay hệ thống (Menu Bar / System Tray):**
   - Tự động phát hiện khi bất kỳ model nào ở khung ngắn hạn 5H chạm ngưỡng **≤ 5%**.
   - Tự động chuyển đổi icon khay sang icon có huy hiệu cảnh báo màu đỏ/cam nổi bật kèm tooltip cảnh báo người dùng.

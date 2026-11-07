@@ -5,3 +5,5 @@ src-tauri/target
 src-tauri/gen
 .env
 src-tauri/oauth.local
+.agent
+docs

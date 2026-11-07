@@ -251,6 +251,26 @@ button, input { font: inherit; }
 .current-badge { background: var(--current-badge); color: var(--current-text); }
 .warn-badge { background: var(--warn-badge); color: var(--warn-text); }
 
+.critical-quota-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-line);
+  color: var(--danger-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.critical-quota-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
 .quota-list { display: flex; flex-direction: column; gap: 6px; }
 
 .quota-bar {
@@ -421,6 +441,66 @@ button, input { font: inherit; }
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.setting-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--button-line);
+  transition: 0.2s ease;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text);
+  transition: 0.2s ease;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+  background-color: var(--accent-text);
+}
+
+.toggle-label {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.4;
 }
 
 .theme-grid {

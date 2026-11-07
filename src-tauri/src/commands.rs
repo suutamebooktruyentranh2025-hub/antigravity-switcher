@@ -248,6 +248,18 @@ pub fn set_ui_locale(app: AppHandle, locale: String, state: State<'_, AppState>)
     Ok(())
 }
 
+#[tauri::command]
+pub fn get_auto_check_quota(state: State<'_, AppState>) -> Result<bool, String> {
+    let store = state.store.lock().map_err(|error| error.to_string())?;
+    Ok(store.read_auto_check_quota())
+}
+
+#[tauri::command]
+pub fn set_auto_check_quota(enabled: bool, state: State<'_, AppState>) -> Result<(), String> {
+    let store = state.store.lock().map_err(|error| error.to_string())?;
+    store.write_auto_check_quota(enabled)
+}
+
 fn accept_oauth_callback(
     listener: TcpListener,
     expected_state: String,

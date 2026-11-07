@@ -178,3 +178,20 @@ export async function listenSwitchPhase(
   }
   return listen<SwitchPhaseEvent>("switch-phase", (event) => handler(event.payload));
 }
+
+let preview_auto_check = true;
+
+export async function getAutoCheckQuota(): Promise<boolean> {
+  if (!tauriReady()) {
+    return preview_auto_check;
+  }
+  return invoke<boolean>("get_auto_check_quota");
+}
+
+export async function setAutoCheckQuota(enabled: boolean): Promise<void> {
+  if (!tauriReady()) {
+    preview_auto_check = enabled;
+    return;
+  }
+  return invoke("set_auto_check_quota", { enabled });
+}

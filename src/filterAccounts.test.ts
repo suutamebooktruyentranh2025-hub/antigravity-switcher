@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   countTiers,
   formatResetCountdown,
+  isAccountCritical,
   quotaTone,
   rowsForWindow,
   visibleAccounts,
@@ -87,5 +88,31 @@ describe("account filters", () => {
     const now_ms = Date.parse("2026-10-09T12:00:00Z");
     expect(formatResetCountdown("2026-10-09T16:54:00Z", now_ms)).toBe("4h 54m");
     expect(formatResetCountdown("2026-10-10T16:00:00Z", now_ms)).toBe("1d 4h");
+  });
+
+  it("detects critical quota when any 5h model has <= 5% remaining", () => {
+    const safe_account: AccountRecord = {
+      id: "safe",
+      email: "safe@example.com",
+      tier: "PRO",
+      quota: [
+        { model_name: "Flash", window: "5h", percent_remaining: 6, reset_at: "2026-10-09T16:00:00Z" },
+        { model_name: "Pro", window: "weekly", percent_remaining: 2, reset_at: "2026-10-16T16:00:00Z" },
+      ],
+      quota_refreshed_at: null,
+      created_at: "2026-10-09T08:00:00Z",
+      last_used_at: null,
+      needs_relogin: false,
+      last_error: null,
+    };
+    expect(isAccountCritical(safe_account)).toBe(false);
+
+    const critical_account: AccountRecord = {
+      ...safe_account,
+      quota: [
+        { model_name: "Flash", window: "5h", percent_remaining: 5, reset_at: "2026-10-09T16:00:00Z" },
+      ],
+    };
+    expect(isAccountCritical(critical_account)).toBe(true);
   });
 });

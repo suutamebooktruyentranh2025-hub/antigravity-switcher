@@ -283,6 +283,12 @@ fn group_quota_rows(groups: &[SummaryGroup]) -> Vec<QuotaRow> {
     quota_rows
 }
 
+pub fn has_critical_quota(quota_rows: &[QuotaRow]) -> bool {
+    quota_rows
+        .iter()
+        .any(|row| row.window == "5h" && row.percent_remaining <= 5)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -424,5 +430,34 @@ mod tests {
             classify_refresh_failure(None, "connection reset"),
             RefreshFailure::KeepSnapshot(_)
         ));
+    }
+
+    #[test]
+    fn test_account_has_critical_quota() {
+        let rows_safe = vec![
+            QuotaRow {
+                model_name: "Gemini 3 Flash".into(),
+                window: "5h".into(),
+                percent_remaining: 6,
+                reset_at: "2026-11-07T18:00:00Z".into(),
+            },
+            QuotaRow {
+                model_name: "Claude Sonnet 4.6".into(),
+                window: "weekly".into(),
+                percent_remaining: 2,
+                reset_at: "2026-11-14T18:00:00Z".into(),
+            },
+        ];
+        assert!(!has_critical_quota(&rows_safe));
+
+        let rows_critical = vec![
+            QuotaRow {
+                model_name: "Gemini 3 Flash".into(),
+                window: "5h".into(),
+                percent_remaining: 5,
+                reset_at: "2026-11-07T18:00:00Z".into(),
+            },
+        ];
+        assert!(has_critical_quota(&rows_critical));
     }
 }

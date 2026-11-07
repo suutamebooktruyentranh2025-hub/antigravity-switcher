@@ -83,6 +83,9 @@ const vi_messages = {
   session_write_failed: "Không ghi được phiên vào Keychain của Antigravity.",
   session_restore_failed: "Không khôi phục được phiên cũ.",
   callback_done: "Đăng nhập xong. Bạn có thể đóng tab này.",
+  auto_check_quota: "Tự động kiểm tra hạn mức mỗi giờ",
+  auto_check_quota_desc: "Tự động làm mới hạn mức của tài khoản đang dùng và cảnh báo khi còn ≤ 5%",
+  quota_critical_warning: "Hạn mức 5H của tài khoản này sắp hết (≤ 5%). Hãy đổi tài khoản.",
 } as const;
 
 const en_messages: { [Key in keyof typeof vi_messages]: string } = {
@@ -166,6 +169,9 @@ const en_messages: { [Key in keyof typeof vi_messages]: string } = {
   session_write_failed: "Could not write the session to Antigravity's Keychain.",
   session_restore_failed: "Could not restore the old session.",
   callback_done: "Sign-in finished. You can close this tab.",
+  auto_check_quota: "Auto-check quota hourly",
+  auto_check_quota_desc: "Automatically refresh active account quota and warn when ≤ 5%",
+  quota_critical_warning: "5H quota for this account is almost exhausted (≤ 5%). Consider switching.",
 };
 
 export type MessageKey = keyof typeof vi_messages;

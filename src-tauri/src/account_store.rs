@@ -74,6 +74,18 @@ impl<V: TokenVault> AccountStore<V> {
         fs::write(self.root_dir.join("ui-locale"), value).map_err(|error| error.to_string())
     }
 
+    pub fn read_auto_check_quota(&self) -> bool {
+        match fs::read_to_string(self.root_dir.join("auto-check-quota")) {
+            Ok(value) => value.trim() != "false",
+            Err(_) => true,
+        }
+    }
+
+    pub fn write_auto_check_quota(&self, enabled: bool) -> Result<(), String> {
+        let value = if enabled { "true" } else { "false" };
+        fs::write(self.root_dir.join("auto-check-quota"), value).map_err(|error| error.to_string())
+    }
+
     pub fn align_current_account(&mut self, refresh_token: Option<&str>) -> Result<(), String> {
         let Some(refresh_token) = refresh_token.map(str::trim).filter(|value| !value.is_empty()) else {
             return Ok(());
@@ -188,7 +200,7 @@ impl<V: TokenVault> AccountStore<V> {
         Ok(None)
     }
 
-    fn read_record(&self, account_id: &str) -> Result<AccountRecord, String> {
+    pub fn read_record(&self, account_id: &str) -> Result<AccountRecord, String> {
         let raw = fs::read_to_string(self.record_path(account_id)).map_err(|error| error.to_string())?;
         serde_json::from_str(&raw).map_err(|error| error.to_string())
     }
@@ -307,6 +319,17 @@ mod tests {
         assert_eq!(store.read_ui_locale(), "en");
         store.write_ui_locale("fr").unwrap();
         assert_eq!(store.read_ui_locale(), "vi");
+        let _ = fs::remove_dir_all(store.root_dir());
+    }
+
+    #[test]
+    fn auto_check_quota_defaults_to_true_and_persists() {
+        let store = temp_store();
+        assert!(store.read_auto_check_quota());
+        store.write_auto_check_quota(false).unwrap();
+        assert!(!store.read_auto_check_quota());
+        store.write_auto_check_quota(true).unwrap();
+        assert!(store.read_auto_check_quota());
         let _ = fs::remove_dir_all(store.root_dir());
     }
 }

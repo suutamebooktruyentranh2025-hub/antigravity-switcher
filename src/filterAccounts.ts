@@ -75,6 +75,10 @@ export function rowsForWindow(account: AccountRecord, quota_window: QuotaWindow)
   return account.quota.filter((row) => row.window === quota_window);
 }
 
+export function isAccountCritical(account: AccountRecord): boolean {
+  return account.quota.some((q) => q.window === "5h" && q.percent_remaining <= 5);
+}
+
 export function formatResetCountdown(reset_at: string, now_ms: number): string {
   const reset_ms = Date.parse(reset_at);
   if (Number.isNaN(reset_ms)) {

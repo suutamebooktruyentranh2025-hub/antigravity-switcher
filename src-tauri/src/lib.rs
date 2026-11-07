@@ -6,6 +6,7 @@ mod quota;
 mod session;
 mod switcher;
 mod tray;
+mod scheduler;
 
 use tauri::WindowEvent;
 
@@ -15,6 +16,7 @@ pub fn run() {
         .manage(commands::AppState::open().expect("Không mở được kho tài khoản."))
         .setup(|app| {
             tray::install(app)?;
+            scheduler::start_hourly_quota_worker(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -32,7 +34,9 @@ pub fn run() {
             commands::switch_account,
             commands::relaunch_antigravity,
             commands::delete_account,
-            commands::set_ui_locale
+            commands::set_ui_locale,
+            commands::get_auto_check_quota,
+            commands::set_auto_check_quota
         ])
         .run(tauri::generate_context!())
         .expect("Antigravity Switcher dừng vì lỗi.");

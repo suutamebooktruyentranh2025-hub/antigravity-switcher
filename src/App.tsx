@@ -12,6 +12,8 @@ import {
   refreshAllAccounts,
   relaunchAntigravity,
   setUiLocale,
+  getAutoCheckQuota,
+  setAutoCheckQuota,
   startOAuthLogin,
   switchAccount,
 } from "./api";
@@ -30,6 +32,7 @@ import {
 import {
   countTiers,
   formatResetCountdown,
+  isAccountCritical,
   quotaTone,
   rowsForWindow,
   visibleAccounts,
@@ -123,6 +126,7 @@ export function App() {
   const [oauth_notice, setOauthNotice] = useState<{ key: MessageKey } | { text: string } | null>(null);
   const [oauth_failed, setOauthFailed] = useState(false);
   const [delete_target, setDeleteTarget] = useState<AccountRecord | null>(null);
+  const [auto_check_quota, setAutoCheckQuotaState] = useState(true);
   const [now_ms, setNowMs] = useState(() => Date.now());
   const oauth_active_ref = useRef(false);
   const oauth_finishing_ref = useRef(false);
@@ -162,6 +166,7 @@ export function App() {
 
   useEffect(() => {
     void readAppVersion().then(setAppVersion);
+    void getAutoCheckQuota().then(setAutoCheckQuotaState);
     void reload();
     const timer = window.setInterval(() => setNowMs(Date.now()), 30000);
     let unlisten_phase = () => {};
@@ -269,6 +274,11 @@ export function App() {
     }
   }
 
+  async function onToggleAutoCheck(enabled: boolean) {
+    setAutoCheckQuotaState(enabled);
+    await setAutoCheckQuota(enabled);
+  }
+
   async function onSwitch(account_id: string) {
     setRelaunchAccountId(null);
     setBusySwitchId(account_id);
@@ -364,6 +374,7 @@ export function App() {
     const is_current = account.id === current_account_id;
     const is_switching = account.id === busy_switch_id;
     const is_refreshing = refreshing_id === "all" || refreshing_id === account.id;
+    const is_critical = is_current && isAccountCritical(account);
     return (
       <article key={account.id} className={is_current ? "account-card current" : "account-card"}>
         <div className="card-head">
@@ -374,6 +385,12 @@ export function App() {
             {account.needs_relogin ? <span className="warn-badge">{t("relogin")}</span> : null}
           </div>
         </div>
+        {is_critical ? (
+          <div className="critical-quota-banner" role="alert">
+            <span className="critical-quota-icon">⚠️</span>
+            <span>{t("quota_critical_warning")}</span>
+          </div>
+        ) : null}
         {is_switching && switch_phase ? <p className="muted">{phase_keys[switch_phase] ? t(phase_keys[switch_phase]) : switch_phase}</p> : null}
         {is_refreshing ? (
           <p className="muted loading-line">
@@ -486,6 +503,18 @@ export function App() {
               <button className={color_scheme === "light" ? "segment-button active" : "segment-button"} onClick={() => setColorScheme("light")}>{t("light")}</button>
               <button className={color_scheme === "dark" ? "segment-button active" : "segment-button"} onClick={() => setColorScheme("dark")}>{t("dark")}</button>
               <button className={color_scheme === "system" ? "segment-button active" : "segment-button"} onClick={() => setColorScheme("system")}>{t("system")}</button>
+            </div>
+            <p className="field-label">{t("auto_check_quota")}</p>
+            <div className="setting-toggle-row">
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={auto_check_quota}
+                  onChange={(event) => void onToggleAutoCheck(event.target.checked)}
+                />
+                <span className="toggle-slider" />
+              </label>
+              <span className="toggle-label">{t("auto_check_quota_desc")}</span>
             </div>
             <p className="field-label">{t("palette")}</p>
             <div className="theme-grid">

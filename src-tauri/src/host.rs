@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -10,13 +11,97 @@ use crate::quota::{
     MODEL_CATALOG_HOSTS, QUOTA_SUMMARY_HOSTS, TIER_HOSTS,
 };
 use crate::session::{
-    encode_keychain_value, encode_sqlite_token_value, ide_state_database, read_sqlite_oauth_token,
-    replace_sqlite_oauth_token, SessionTarget,
+    decode_standalone_backup, encode_jetski_token_file, encode_keychain_value,
+    encode_sqlite_token_value, encode_standalone_backup, ide_state_database, jetski_token_path,
+    read_jetski_token_file, read_sqlite_oauth_token, refresh_token_from_live_stores,
+    replace_sqlite_oauth_token, write_jetski_token_file, SessionTarget,
 };
 use crate::switcher::{FreshSession, IdeProcess, IdeSession, TokenRefresher};
 
+pub const ANTIGRAVITY_APP_PATH: &str = "/Applications/Antigravity.app";
+pub const ANTIGRAVITY_APP_BUNDLE_ID: &str = "com.google.antigravity";
 pub const ANTIGRAVITY_IDE_APP_PATH: &str = "/Applications/Antigravity IDE.app";
 pub const ANTIGRAVITY_IDE_PROCESS_NAME: &str = "Antigravity IDE";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SwitchProcessKind {
+    AntigravityApp,
+    Ide,
+}
+
+pub fn switch_process_kind(app_installed: bool, ide_installed: bool) -> SwitchProcessKind {
+    if app_installed || !ide_installed {
+        SwitchProcessKind::AntigravityApp
+    } else {
+        SwitchProcessKind::Ide
+    }
+}
+
+fn installed_switch_process() -> SwitchProcessKind {
+    switch_process_kind(
+        Path::new(ANTIGRAVITY_APP_PATH).exists(),
+        Path::new(ANTIGRAVITY_IDE_APP_PATH).exists(),
+    )
+}
+
+pub fn active_product_name() -> &'static str {
+    match installed_switch_process() {
+        SwitchProcessKind::AntigravityApp => "Antigravity",
+        SwitchProcessKind::Ide => "Antigravity IDE",
+    }
+}
+
+fn launch_path(process_kind: SwitchProcessKind) -> &'static str {
+    match process_kind {
+        SwitchProcessKind::AntigravityApp => ANTIGRAVITY_APP_PATH,
+        SwitchProcessKind::Ide => ANTIGRAVITY_IDE_APP_PATH,
+    }
+}
+
+pub fn processes_to_quit(
+    primary: SwitchProcessKind,
+    app_running: bool,
+    ide_running: bool,
+) -> Vec<SwitchProcessKind> {
+    match primary {
+        SwitchProcessKind::AntigravityApp => {
+            let mut quit_targets = Vec::new();
+            if ide_running {
+                quit_targets.push(SwitchProcessKind::Ide);
+            }
+            if app_running {
+                quit_targets.push(SwitchProcessKind::AntigravityApp);
+            }
+            quit_targets
+        }
+        SwitchProcessKind::Ide if ide_running => vec![SwitchProcessKind::Ide],
+        SwitchProcessKind::Ide => Vec::new(),
+    }
+}
+
+pub fn processes_to_launch(primary: SwitchProcessKind, ide_was_running: bool) -> Vec<SwitchProcessKind> {
+    match primary {
+        SwitchProcessKind::AntigravityApp => {
+            let mut launch_targets = vec![SwitchProcessKind::AntigravityApp];
+            if ide_was_running {
+                launch_targets.push(SwitchProcessKind::Ide);
+            }
+            launch_targets
+        }
+        SwitchProcessKind::Ide => vec![SwitchProcessKind::Ide],
+    }
+}
+
+fn quit_script(process_kind: SwitchProcessKind) -> String {
+    match process_kind {
+        SwitchProcessKind::AntigravityApp => {
+            format!("tell application id \"{ANTIGRAVITY_APP_BUNDLE_ID}\" to quit")
+        }
+        SwitchProcessKind::Ide => {
+            format!("tell application \"{ANTIGRAVITY_IDE_PROCESS_NAME}\" to quit")
+        }
+    }
+}
 const PROCESS_WAIT: Duration = Duration::from_secs(10);
 
 pub struct MacTokenVault;
@@ -88,68 +173,73 @@ impl TokenRefresher for GoogleRefresher {
     }
 }
 
-pub struct MacIdeProcess;
+pub struct MacIdeProcess {
+    ide_was_running: Cell<bool>,
+}
+
+impl MacIdeProcess {
+    pub fn new() -> Self {
+        Self {
+            ide_was_running: Cell::new(false),
+        }
+    }
+}
 
 impl IdeProcess for MacIdeProcess {
     fn is_installed(&self) -> bool {
-        Path::new(ANTIGRAVITY_IDE_APP_PATH).exists()
+        Path::new(launch_path(installed_switch_process())).exists()
     }
 
     fn version_text(&self) -> Option<String> {
-        let output = Command::new("defaults")
-            .args([
-                "read",
-                &format!("{ANTIGRAVITY_IDE_APP_PATH}/Contents/Info"),
-                "CFBundleShortVersionString",
-            ])
-            .output()
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        let version_text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if version_text.is_empty() {
-            None
-        } else {
-            Some(version_text)
-        }
+        read_bundle_version(launch_path(installed_switch_process()))
     }
 
     fn prefers_sqlite(&self) -> bool {
-        true
+        installed_switch_process() == SwitchProcessKind::Ide
+    }
+
+    fn uses_standalone_store(&self) -> bool {
+        installed_switch_process() == SwitchProcessKind::AntigravityApp
     }
 
     fn is_running(&self) -> bool {
-        ide_process_is_running()
+        !running_quit_targets().is_empty()
     }
 
     fn quit(&self) -> Result<(), String> {
-        let _ = Command::new("osascript")
-            .args([
-                "-e",
-                &format!("tell application \"{ANTIGRAVITY_IDE_PROCESS_NAME}\" to quit"),
-            ])
-            .output();
-        if wait_until(PROCESS_WAIT, || !ide_process_is_running()) {
+        self.ide_was_running.set(ide_process_is_running());
+        let quit_targets = running_quit_targets();
+        for process_kind in &quit_targets {
+            let _ = Command::new("osascript")
+                .args(["-e", &quit_script(*process_kind)])
+                .output();
+        }
+        if wait_until(PROCESS_WAIT, || running_quit_targets().is_empty()) {
             Ok(())
         } else {
-            Err("Antigravity IDE vẫn đang chạy.".into())
+            Err(format!("{} vẫn đang chạy.", quit_target_label(&running_quit_targets())))
         }
     }
 
     fn launch(&self) -> Result<(), String> {
-        let status = Command::new("open")
-            .arg(ANTIGRAVITY_IDE_APP_PATH)
-            .status()
-            .map_err(|error| error.to_string())?;
-        if !status.success() {
-            return Err("Không mở được Antigravity IDE.".into());
+        let launch_targets = processes_to_launch(installed_switch_process(), self.ide_was_running.get());
+        for process_kind in launch_targets {
+            let status = Command::new("open")
+                .arg(launch_path(process_kind))
+                .status()
+                .map_err(|error| error.to_string())?;
+            let product_name = match process_kind {
+                SwitchProcessKind::AntigravityApp => "Antigravity",
+                SwitchProcessKind::Ide => "Antigravity IDE",
+            };
+            if !status.success() {
+                return Err(format!("Không mở được {product_name}."));
+            }
+            if !wait_until(PROCESS_WAIT, || process_is_running(process_kind)) {
+                return Err(format!("{product_name} không xuất hiện sau khi mở."));
+            }
         }
-        if wait_until(PROCESS_WAIT, ide_process_is_running) {
-            Ok(())
-        } else {
-            Err("Antigravity IDE không xuất hiện sau khi mở.".into())
-        }
+        Ok(())
     }
 }
 
@@ -180,20 +270,31 @@ impl IdeSession for MacIdeSession {
         match target {
             SessionTarget::Keychain => read_antigravity_keychain(),
             SessionTarget::Sqlite => read_sqlite_oauth_token(&ide_state_database(&self.home_dir)),
+            SessionTarget::Standalone => {
+                let keychain_value = read_antigravity_keychain()?;
+                let jetski_file = read_jetski_token_file(&jetski_token_path(&self.home_dir))?;
+                Ok(Some(encode_standalone_backup(
+                    keychain_value.as_deref(),
+                    jetski_file.as_deref(),
+                )))
+            }
         }
     }
 
     fn write_session(&self, target: SessionTarget, fresh_session: &FreshSession) -> Result<(), String> {
         match target {
             SessionTarget::Keychain => write_antigravity_keychain(fresh_session),
-            SessionTarget::Sqlite => {
-                let path = ide_state_database(&self.home_dir);
-                let token_value = encode_sqlite_token_value(
+            SessionTarget::Sqlite => write_ide_sqlite(&self.home_dir, fresh_session),
+            SessionTarget::Standalone => {
+                write_antigravity_keychain(fresh_session)?;
+                let token_path = jetski_token_path(&self.home_dir);
+                let token_file = encode_jetski_token_file(
                     &fresh_session.access_token,
                     &fresh_session.refresh_token,
                     &fresh_session.expiry_rfc3339,
+                    fresh_session.id_token.as_deref(),
                 );
-                replace_sqlite_oauth_token(&path, &token_value)
+                write_jetski_token_file(&token_path, &token_file)
             }
         }
     }
@@ -211,6 +312,13 @@ impl IdeSession for MacIdeSession {
                     None => Ok(()),
                 }
             }
+            SessionTarget::Standalone => {
+                let (keychain_value, jetski_file) = backup_value
+                    .map(decode_standalone_backup)
+                    .unwrap_or((None, None));
+                restore_antigravity_keychain(keychain_value.as_deref())?;
+                restore_jetski_file(&jetski_token_path(&self.home_dir), jetski_file.as_deref())
+            }
         }
     }
 }
@@ -221,6 +329,10 @@ pub fn app_support_dir() -> PathBuf {
 
 pub fn executable_belongs_to_ide(command_line: &str) -> bool {
     command_line.contains("/Antigravity IDE.app/Contents/MacOS/")
+}
+
+pub fn executable_belongs_to_antigravity_app(command_line: &str) -> bool {
+    command_line.contains("/Antigravity.app/Contents/")
 }
 
 pub fn browser_launch_args(url: &str) -> Vec<String> {
@@ -547,19 +659,106 @@ fn restore_antigravity_keychain(backup_value: Option<&str>) -> Result<(), String
     command_ok(&output, "Không khôi phục được phiên cũ.")
 }
 
-fn ide_process_is_running() -> bool {
+fn process_command_matches(matcher: impl Fn(&str) -> bool) -> bool {
     let output = Command::new("ps").args(["-ax", "-o", "command="]).output();
     match output {
-        Ok(output) => String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .any(executable_belongs_to_ide),
+        Ok(output) => String::from_utf8_lossy(&output.stdout).lines().any(matcher),
         Err(_) => false,
     }
 }
 
+fn ide_process_is_running() -> bool {
+    process_command_matches(executable_belongs_to_ide)
+}
+
+fn antigravity_app_is_running() -> bool {
+    process_command_matches(executable_belongs_to_antigravity_app)
+}
+
+fn process_is_running(process_kind: SwitchProcessKind) -> bool {
+    match process_kind {
+        SwitchProcessKind::AntigravityApp => antigravity_app_is_running(),
+        SwitchProcessKind::Ide => ide_process_is_running(),
+    }
+}
+
+fn running_quit_targets() -> Vec<SwitchProcessKind> {
+    processes_to_quit(
+        installed_switch_process(),
+        antigravity_app_is_running(),
+        ide_process_is_running(),
+    )
+}
+
+fn quit_target_label(quit_targets: &[SwitchProcessKind]) -> String {
+    quit_targets
+        .iter()
+        .map(|process_kind| match process_kind {
+            SwitchProcessKind::AntigravityApp => "Antigravity",
+            SwitchProcessKind::Ide => "Antigravity IDE",
+        })
+        .collect::<Vec<_>>()
+        .join(" và ")
+}
+
+fn read_bundle_version(app_path: &str) -> Option<String> {
+    let output = Command::new("defaults")
+        .args([
+            "read",
+            &format!("{app_path}/Contents/Info"),
+            "CFBundleShortVersionString",
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let version_text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if version_text.is_empty() {
+        None
+    } else {
+        Some(version_text)
+    }
+}
+
+fn write_ide_sqlite(home_dir: &Path, fresh_session: &FreshSession) -> Result<(), String> {
+    let path = ide_state_database(home_dir);
+    let token_value = encode_sqlite_token_value(
+        &fresh_session.access_token,
+        &fresh_session.refresh_token,
+        &fresh_session.expiry_rfc3339,
+    );
+    replace_sqlite_oauth_token(&path, &token_value)
+}
+
+fn restore_jetski_file(path: &Path, backup_value: Option<&str>) -> Result<(), String> {
+    match backup_value {
+        Some(value) => write_jetski_token_file(path, value),
+        None => {
+            if path.is_file() {
+                std::fs::remove_file(path).map_err(|error| error.to_string())?;
+            }
+            Ok(())
+        }
+    }
+}
+
 pub fn logged_in_refresh_token() -> Option<String> {
-    let encoded = read_sqlite_oauth_token(&ide_state_database(&home_dir())).ok().flatten()?;
-    crate::session::refresh_token_from_oauth_value(&encoded)
+    match installed_switch_process() {
+        SwitchProcessKind::AntigravityApp => {
+            let keychain_value = read_antigravity_keychain().ok().flatten();
+            let jetski_file = read_jetski_token_file(&jetski_token_path(&home_dir()))
+                .ok()
+                .flatten();
+            refresh_token_from_live_stores(keychain_value.as_deref(), jetski_file.as_deref())
+        }
+        SwitchProcessKind::Ide => {
+            let encoded = read_sqlite_oauth_token(&ide_state_database(&home_dir()))
+                .ok()
+                .flatten()?;
+            crate::session::refresh_token_from_oauth_value(&encoded)
+        }
+    }
 }
 
 fn wait_until(limit: Duration, mut condition: impl FnMut() -> bool) -> bool {
@@ -612,6 +811,68 @@ fn stderr_says_missing(output: &std::process::Output) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relaunch_brings_back_the_ide_that_was_open() {
+        assert_eq!(
+            processes_to_launch(SwitchProcessKind::AntigravityApp, true),
+            vec![SwitchProcessKind::AntigravityApp, SwitchProcessKind::Ide]
+        );
+        assert_eq!(
+            processes_to_launch(SwitchProcessKind::AntigravityApp, false),
+            vec![SwitchProcessKind::AntigravityApp]
+        );
+        assert_eq!(
+            processes_to_launch(SwitchProcessKind::Ide, true),
+            vec![SwitchProcessKind::Ide]
+        );
+    }
+
+    #[test]
+    fn switching_the_app_also_quits_a_running_ide() {
+        assert_eq!(
+            processes_to_quit(SwitchProcessKind::AntigravityApp, true, true),
+            vec![SwitchProcessKind::Ide, SwitchProcessKind::AntigravityApp]
+        );
+        assert_eq!(
+            processes_to_quit(SwitchProcessKind::AntigravityApp, false, true),
+            vec![SwitchProcessKind::Ide]
+        );
+        assert_eq!(
+            processes_to_quit(SwitchProcessKind::AntigravityApp, true, false),
+            vec![SwitchProcessKind::AntigravityApp]
+        );
+        assert_eq!(
+            processes_to_quit(SwitchProcessKind::Ide, false, true),
+            vec![SwitchProcessKind::Ide]
+        );
+    }
+
+    #[test]
+    fn installed_antigravity_app_is_the_switch_process() {
+        assert_eq!(
+            switch_process_kind(true, true),
+            SwitchProcessKind::AntigravityApp
+        );
+        assert_eq!(switch_process_kind(false, true), SwitchProcessKind::Ide);
+        assert_eq!(
+            switch_process_kind(false, false),
+            SwitchProcessKind::AntigravityApp
+        );
+    }
+
+    #[test]
+    fn antigravity_app_process_line_includes_the_language_server() {
+        assert!(executable_belongs_to_antigravity_app(
+            "/Applications/Antigravity.app/Contents/MacOS/Antigravity"
+        ));
+        assert!(executable_belongs_to_antigravity_app(
+            "/Applications/Antigravity.app/Contents/Resources/bin/language_server --app_data_dir antigravity"
+        ));
+        assert!(!executable_belongs_to_antigravity_app(
+            "/Applications/Antigravity IDE.app/Contents/MacOS/Electron"
+        ));
+    }
 
     #[test]
     fn ide_process_match_uses_the_app_executable() {

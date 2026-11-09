@@ -8,8 +8,9 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::account_store::{AccountRecord, AccountStore};
 use crate::host::{
-    app_support_dir, apply_quota_refresh, exchange_auth_code, fetch_quota_snapshot, fetch_user_email,
-    logged_in_refresh_token, open_browser, GoogleRefresher, MacIdeProcess, MacIdeSession, MacTokenVault,
+    active_product_name, app_support_dir, apply_quota_refresh, exchange_auth_code,
+    fetch_quota_snapshot, fetch_user_email, logged_in_refresh_token, open_browser, GoogleRefresher,
+    MacIdeProcess, MacIdeSession, MacTokenVault,
 };
 use crate::oauth::{build_auth_url, callback_page, oauth_client_from_env, parse_callback_request, OAUTH_WAIT_SECONDS};
 use crate::switcher::{switch_to_account, IdeProcess, SwitchError};
@@ -187,10 +188,11 @@ pub fn switch_saved_account(app: &AppHandle, account_id: &str) -> Result<Account
     })?;
     let phase_app = app.clone();
     let phase_account_id = account_id.clone();
+    let ide_process = MacIdeProcess::new();
     let switched = switch_to_account(
         &refresh_token,
         &GoogleRefresher,
-        &MacIdeProcess,
+        &ide_process,
         &MacIdeSession::new(),
         |phase| {
             let _ = phase_app.emit(
@@ -226,7 +228,7 @@ pub fn switch_saved_account(app: &AppHandle, account_id: &str) -> Result<Account
 
 #[tauri::command]
 pub fn relaunch_antigravity() -> Result<(), String> {
-    MacIdeProcess.launch()
+    MacIdeProcess::new().launch()
 }
 
 #[tauri::command]
@@ -322,17 +324,21 @@ fn switch_error_json(error: SwitchError) -> String {
             error_json("relogin", "Phiên hết hạn. Hãy đăng nhập lại tài khoản này.")
         }
         SwitchError::RefreshFailed(message) => error_json("refresh_failed", &message),
-        SwitchError::NotInstalled => error_json("not_installed", "Máy chưa cài Antigravity IDE."),
-        SwitchError::StillRunning => {
-            error_json("still_running", "Antigravity IDE không chịu thoát. Phiên chưa được ghi.")
+        SwitchError::NotInstalled => {
+            error_json("not_installed", &format!("Máy chưa cài {}.", active_product_name()))
         }
+        SwitchError::StillRunning => error_json(
+            "still_running",
+            &format!("{} không chịu thoát. Phiên chưa được ghi.", active_product_name()),
+        ),
         SwitchError::WriteFailed(_) => error_json(
             "write_failed",
-            "Ghi phiên lỗi. Antigravity IDE đã được mở lại với phiên cũ.",
+            &format!("Ghi phiên lỗi. {} đã được mở lại với phiên cũ.", active_product_name()),
         ),
-        SwitchError::LaunchFailed(_) => {
-            error_json("launch_failed", "Phiên đã ghi nhưng Antigravity IDE không mở lại.")
-        }
+        SwitchError::LaunchFailed(_) => error_json(
+            "launch_failed",
+            &format!("Phiên đã ghi nhưng {} không mở lại.", active_product_name()),
+        ),
     }
 }
 

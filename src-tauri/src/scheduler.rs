@@ -42,12 +42,18 @@ pub fn check_ide_account_change(app: &AppHandle) {
             let msg = if let Some(ref new_id) = current_id {
                 let email = store.read_record(new_id).map(|r| r.email).unwrap_or_default();
                 if !email.is_empty() {
-                    Some(format!("Tài khoản trên Antigravity IDE đã chuyển sang {email}"))
+                    Some(format!(
+                        "Tài khoản trên {} đã chuyển sang {email}",
+                        crate::host::active_product_name()
+                    ))
                 } else {
                     None
                 }
             } else if live_token.is_none() && previous_current_id.is_some() {
-                Some("Antigravity IDE đã đăng xuất tài khoản.".to_string())
+                Some(format!(
+                    "{} đã đăng xuất tài khoản.",
+                    crate::host::active_product_name()
+                ))
             } else {
                 None
             };

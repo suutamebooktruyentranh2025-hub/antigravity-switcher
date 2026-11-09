@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 pub enum SessionTarget {
     Keychain,
     Sqlite,
+    Standalone,
 }
 
 pub fn choose_session_target(version_text: Option<&str>, sqlite_file_exists: bool) -> SessionTarget {
@@ -21,7 +22,7 @@ pub fn version_is_below_2(version_text: &str) -> bool {
     major < 2
 }
 
-pub fn encode_keychain_value(
+fn token_payload_json(
     access_token: &str,
     refresh_token: &str,
     expiry_rfc3339: &str,
@@ -39,11 +40,122 @@ pub fn encode_keychain_value(
     if let Some(id_token) = id_token.filter(|value| !value.is_empty()) {
         payload["id_token"] = serde_json::Value::String(id_token.to_string());
     }
+    payload.to_string()
+}
+
+pub fn encode_keychain_value(
+    access_token: &str,
+    refresh_token: &str,
+    expiry_rfc3339: &str,
+    id_token: Option<&str>,
+) -> String {
     let encoded = base64::Engine::encode(
         &base64::engine::general_purpose::STANDARD,
-        payload.to_string(),
+        token_payload_json(access_token, refresh_token, expiry_rfc3339, id_token),
     );
     format!("go-keyring-base64:{encoded}")
+}
+
+pub fn jetski_token_path(home_dir: &Path) -> PathBuf {
+    home_dir.join(".gemini/jetski-standalone-oauth-token")
+}
+
+pub fn encode_jetski_token_file(
+    access_token: &str,
+    refresh_token: &str,
+    expiry_rfc3339: &str,
+    id_token: Option<&str>,
+) -> String {
+    token_payload_json(access_token, refresh_token, expiry_rfc3339, id_token)
+}
+
+pub fn refresh_token_from_keychain_value(encoded: &str) -> Option<String> {
+    let payload_b64 = encoded.trim().strip_prefix("go-keyring-base64:")?;
+    let payload_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, payload_b64).ok()?;
+    refresh_token_from_token_json(&payload_bytes)
+}
+
+pub fn refresh_token_from_jetski_file(encoded: &str) -> Option<String> {
+    refresh_token_from_token_json(encoded.as_bytes())
+}
+
+fn refresh_token_from_token_json(payload_bytes: &[u8]) -> Option<String> {
+    let payload: serde_json::Value = serde_json::from_slice(payload_bytes).ok()?;
+    let refresh_token = payload.get("token")?.get("refresh_token")?.as_str()?;
+    if refresh_token.is_empty() {
+        None
+    } else {
+        Some(refresh_token.to_string())
+    }
+}
+
+pub fn refresh_token_from_live_stores(
+    keychain_value: Option<&str>,
+    jetski_file: Option<&str>,
+) -> Option<String> {
+    if let Some(refresh_token) = keychain_value.and_then(refresh_token_from_keychain_value) {
+        return Some(refresh_token);
+    }
+    jetski_file.and_then(refresh_token_from_jetski_file)
+}
+
+pub fn write_jetski_token_file(path: &Path, contents: &str) -> Result<(), String> {
+    if let Some(parent_dir) = path.parent() {
+        std::fs::create_dir_all(parent_dir).map_err(|error| error.to_string())?;
+    }
+    let temp_path = path.with_extension("tmp");
+    write_private_text(&temp_path, contents)?;
+    std::fs::rename(&temp_path, path).map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn write_private_text(path: &Path, contents: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)
+        .map_err(|error| error.to_string())?;
+    file.write_all(contents.as_bytes())
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn encode_standalone_backup(keychain_value: Option<&str>, jetski_file: Option<&str>) -> String {
+    serde_json::json!({
+        "keychain": keychain_value,
+        "jetski": jetski_file,
+    })
+    .to_string()
+}
+
+pub fn decode_standalone_backup(encoded: &str) -> (Option<String>, Option<String>) {
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(encoded) else {
+        return (None, None);
+    };
+    let backup_field = |field_name: &str| {
+        payload
+            .get(field_name)
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    };
+    (backup_field("keychain"), backup_field("jetski"))
+}
+
+pub fn read_jetski_token_file(path: &Path) -> Result<Option<String>, String> {
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let contents = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
+    if contents.trim().is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(contents))
+    }
 }
 
 pub fn ide_state_database(home_dir: &Path) -> PathBuf {
@@ -239,6 +351,55 @@ mod tests {
         assert_eq!(choose_session_target(Some("2.1.4"), false), SessionTarget::Keychain);
         assert_eq!(choose_session_target(None, true), SessionTarget::Sqlite);
         assert_eq!(choose_session_target(None, false), SessionTarget::Keychain);
+    }
+
+    #[test]
+    fn jetski_file_round_trips_the_refresh_token() {
+        let encoded = encode_jetski_token_file("access", "refresh-file", "2026-10-09T00:00:00Z", None);
+        assert_eq!(
+            refresh_token_from_jetski_file(&encoded).as_deref(),
+            Some("refresh-file")
+        );
+        let root = std::env::temp_dir().join(format!("agy-jetski-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).unwrap();
+        let token_path = root.join("jetski-standalone-oauth-token");
+        write_jetski_token_file(&token_path, &encoded).unwrap();
+        let stored = read_jetski_token_file(&token_path).unwrap().unwrap();
+        assert_eq!(
+            refresh_token_from_jetski_file(&stored).as_deref(),
+            Some("refresh-file")
+        );
+        assert_eq!(
+            jetski_token_path(Path::new("/Users/example")),
+            Path::new("/Users/example/.gemini/jetski-standalone-oauth-token")
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn standalone_backup_keeps_keychain_and_jetski_file() {
+        let envelope = encode_standalone_backup(Some("keychain-old"), Some("jetski-old"));
+        let (keychain_value, jetski_file) = decode_standalone_backup(&envelope);
+        assert_eq!(keychain_value.as_deref(), Some("keychain-old"));
+        assert_eq!(jetski_file.as_deref(), Some("jetski-old"));
+        let (empty_keychain, empty_jetski) = decode_standalone_backup(&encode_standalone_backup(None, None));
+        assert_eq!(empty_keychain, None);
+        assert_eq!(empty_jetski, None);
+    }
+
+    #[test]
+    fn live_store_prefers_keychain_refresh_token() {
+        let keychain_value = encode_keychain_value("access", "refresh-keychain", "2026-10-09T00:00:00Z", None);
+        let jetski_file = encode_jetski_token_file("access", "refresh-file", "2026-10-09T00:00:00Z", None);
+        assert_eq!(
+            refresh_token_from_live_stores(Some(&keychain_value), Some(&jetski_file)).as_deref(),
+            Some("refresh-keychain")
+        );
+        assert_eq!(
+            refresh_token_from_live_stores(None, Some(&jetski_file)).as_deref(),
+            Some("refresh-file")
+        );
+        assert_eq!(refresh_token_from_live_stores(None, None), None);
     }
 
     #[test]

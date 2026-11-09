@@ -18,6 +18,9 @@ pub trait IdeProcess {
     fn prefers_sqlite(&self) -> bool {
         false
     }
+    fn uses_standalone_store(&self) -> bool {
+        false
+    }
     fn is_running(&self) -> bool;
     fn quit(&self) -> Result<(), String>;
     fn launch(&self) -> Result<(), String>;
@@ -59,7 +62,9 @@ pub fn switch_to_account(
         process.quit().map_err(|_| SwitchError::StillRunning)?;
     }
 
-    let target = if process.prefers_sqlite() {
+    let target = if process.uses_standalone_store() {
+        SessionTarget::Standalone
+    } else if process.prefers_sqlite() {
         SessionTarget::Sqlite
     } else {
         choose_session_target(process.version_text().as_deref(), session.sqlite_file_exists())
@@ -219,6 +224,51 @@ mod tests {
         .unwrap_err();
         assert!(matches!(error, SwitchError::StillRunning));
         assert_eq!(log.lock().unwrap().as_slice(), ["quit"]);
+    }
+
+    #[test]
+    fn antigravity_app_switch_writes_standalone_store() {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let switched = switch_to_account(
+            "refresh",
+            &ScriptedRefresh {
+                result: Ok(sample_session()),
+            },
+            &StandaloneAppProcess { log: log.clone() },
+            &ScriptedSession {
+                fail_write: false,
+                log: log.clone(),
+            },
+            |_| {},
+        );
+        assert!(switched.is_ok());
+        assert_eq!(log.lock().unwrap().as_slice(), ["Standalone", "launch"]);
+    }
+
+    struct StandaloneAppProcess {
+        log: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl IdeProcess for StandaloneAppProcess {
+        fn is_installed(&self) -> bool {
+            true
+        }
+        fn version_text(&self) -> Option<String> {
+            Some("2.29.0".into())
+        }
+        fn uses_standalone_store(&self) -> bool {
+            true
+        }
+        fn is_running(&self) -> bool {
+            false
+        }
+        fn quit(&self) -> Result<(), String> {
+            Ok(())
+        }
+        fn launch(&self) -> Result<(), String> {
+            self.log.lock().unwrap().push("launch".into());
+            Ok(())
+        }
     }
 
     #[test]

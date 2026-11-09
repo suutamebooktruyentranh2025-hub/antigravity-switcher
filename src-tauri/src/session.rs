@@ -111,14 +111,15 @@ pub fn write_jetski_token_file(path: &Path, contents: &str) -> Result<(), String
 
 fn write_private_text(path: &Path, contents: &str) -> Result<(), String> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)
-        .map_err(|error| error.to_string())?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    // Owner-only mode exists on Unix. Windows OpenOptions has no mode bits.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path).map_err(|error| error.to_string())?;
     file.write_all(contents.as_bytes())
         .map_err(|error| error.to_string())?;
     Ok(())

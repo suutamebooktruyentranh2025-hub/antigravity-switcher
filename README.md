@@ -33,7 +33,7 @@ Có sẵn bản cài đặt cho **macOS** (DMG) và **Windows** (EXE). Tự đ�
 
 ## Cài từ file DMG (macOS)
 
-File cài có dạng `Antigravity Switcher_0.1.7_aarch64.dmg` trên máy Apple Silicon, hoặc `Antigravity Switcher_0.1.7_x86_64.dmg` trên máy Intel.
+File cài có dạng `Antigravity Switcher_0.1.8_aarch64.dmg` trên máy Apple Silicon, hoặc `Antigravity Switcher_0.1.8_x86_64.dmg` trên máy Intel.
 
 1. Tải và mở file `.dmg`.
 2. Kéo **Antigravity Switcher** vào thư mục **Applications**.
@@ -52,7 +52,7 @@ sudo xattr -rd com.apple.quarantine "/Applications/Antigravity Switcher.app"
 
 ## Cài từ file EXE (Windows)
 
-File cài có dạng `Antigravity Switcher_0.1.7_x64-setup.exe`.
+File cài có dạng `Antigravity Switcher_0.1.8_x64-setup.exe`.
 
 1. Chạy file `setup.exe`.
 2. Nếu Windows SmartScreen hiện cảnh báo, chọn **More info** → **Run anyway**.
@@ -148,7 +148,7 @@ npm run tauri dev
 3. **Chuyển đổi tài khoản:** 
    - Bấm nút **Chuyển sang tài khoản này** trên thẻ tài khoản dự phòng mong muốn.
    - Hoặc click chuột phải vào icon ứng dụng trên thanh Menu / Khay hệ thống và chọn tài khoản.
-   - Switcher sẽ tự động lưu phiên làm việc an toàn, thoát IDE, nạp token mới vào Keychain và mở lại Antigravity IDE liền mạch.
+   - Switcher thoát Antigravity và Antigravity IDE nếu đang mở, ghi phiên mới vào Keychain và file phiên của Antigravity, rồi mở lại các app đó.
 4. **Bộ lọc & Tìm kiếm:** Sử dụng ô tìm kiếm (`⌘F`) để tra cứu nhanh email hoặc lọc nhanh theo gói cước (`Tất cả`, `PRO`, `ULTRA`, `FREE`).
 5. **Cài đặt hệ thống:** Bấm icon bánh răng ⚙ trên thanh tiêu đề để tùy biến ngôn ngữ, chế độ hiển thị Sáng/Tối, 12 bảng màu Bento và bật/tắt tự động kiểm tra hạn mức.
 
@@ -160,7 +160,8 @@ npm run tauri dev
 | --- | --- |
 | Danh sách tài khoản | `~/Library/Application Support/Antigravity Switcher` |
 | Refresh token của app | macOS Keychain, service `antigravity-switcher` |
-| Phiên Antigravity IDE | macOS Keychain và database SQLite trong `~/Library/Application Support/Antigravity IDE` |
+| Phiên Antigravity 2.29 | macOS Keychain, service `gemini`, account `antigravity`, và `~/.gemini/jetski-standalone-oauth-token` |
+| Phiên Antigravity IDE khi chưa cài Antigravity.app | SQLite `~/Library/Application Support/Antigravity IDE/User/globalStorage/state.vscdb` |
 | Cấu hình giao diện, theme | LocalStorage bên trong webview của ứng dụng |
 
 > **Lưu ý bảo mật:** Xóa tài khoản trong Switcher chỉ gỡ tài khoản khỏi danh sách lưu trữ của app. Phiên đang đăng nhập hiện tại trong Antigravity IDE vẫn được giữ nguyên.

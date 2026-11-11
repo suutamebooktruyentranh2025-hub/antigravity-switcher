@@ -12,7 +12,7 @@ Có sẵn bản cài đặt cho **macOS** (DMG) và **Windows** (EXE). Tự đ�
 
 * **Giao diện Modern Bento Dashboard:**
   * **Thẻ Active Hero:** Hiển thị tài khoản đang kết nối với Antigravity IDE cùng cụm đồng hồ đo hạn mức SVG (`CircularGauge`) trực quan cho từng model (Gemini 3.1 Flash, Gemini 3 Flash, Claude Sonnet 4.6), tự động đổi màu theo % quota còn lại.
-  * **Thẻ Telemetry Hệ thống:** Đèn xung hiển thị trạng thái hoạt động của Antigravity IDE, bộ đếm chu kỳ tự động làm mới hạn mức (60m) và tổng số tài khoản khả dụng.
+  * **Thẻ Telemetry Hệ thống:** Đèn xung hiển thị trạng thái hoạt động của Antigravity IDE, chu kỳ tự động làm mới hạn mức đang chọn và tổng số tài khoản khả dụng.
   * **Chuyển đổi dạng xem:** Hỗ trợ linh hoạt giữa **Dạng lưới thẻ (Grid View)** và **Dạng danh sách gọn (Compact List View)**.
   * **Rút gọn email thông minh:** Tự động tối ưu không gian thẻ dự phòng, hỗ trợ sao chép email 1-chạm.
 * **Bộ Giám Sát Sức Khỏe Tài Khoản & Cảnh Báo Hạ Cấp (Health & Tier Monitor):**
@@ -22,7 +22,7 @@ Có sẵn bản cài đặt cho **macOS** (DMG) và **Windows** (EXE). Tự đ�
 * **Đồng bộ ngầm với Antigravity IDE (IDE Account Watcher):**
   * Tiến trình ngầm siêu nhẹ kiểm tra mỗi 15 giây. Khi bạn đổi tài khoản trực tiếp trong Antigravity IDE, Switcher sẽ tự nhận biết, cập nhật giao diện và gửi thông báo hệ thống.
 * **Tự động kiểm tra hạn mức định kỳ:**
-  * Tự động làm mới hạn mức tài khoản đang dùng mỗi 60 phút và cảnh báo khi mức quota phiên $\le$ 5%.
+  * Tự động làm mới hạn mức tài khoản đang dùng. Mặc định mỗi 10 phút, chọn được 10–120 phút theo bước 10, và cảnh báo khi mức quota phiên $\le$ 5%.
 * **Hộp thoại Cài đặt chuẩn macOS (2-Column Bento):**
   * Tùy biến ngôn ngữ (**Tiếng Việt** / **English**).
   * Chế độ hiển thị (**Sáng** / **Tối** / **Hệ thống**).
@@ -33,7 +33,7 @@ Có sẵn bản cài đặt cho **macOS** (DMG) và **Windows** (EXE). Tự đ�
 
 ## Cài từ file DMG (macOS)
 
-File cài có dạng `Antigravity Switcher_0.1.8_aarch64.dmg` trên máy Apple Silicon, hoặc `Antigravity Switcher_0.1.8_x86_64.dmg` trên máy Intel.
+File cài có dạng `Antigravity Switcher_0.1.9_aarch64.dmg` trên máy Apple Silicon, hoặc `Antigravity Switcher_0.1.9_x86_64.dmg` trên máy Intel.
 
 1. Tải và mở file `.dmg`.
 2. Kéo **Antigravity Switcher** vào thư mục **Applications**.
@@ -52,7 +52,7 @@ sudo xattr -rd com.apple.quarantine "/Applications/Antigravity Switcher.app"
 
 ## Cài từ file EXE (Windows)
 
-File cài có dạng `Antigravity Switcher_0.1.8_x64-setup.exe`.
+File cài có dạng `Antigravity Switcher_0.1.9_x64-setup.exe`.
 
 1. Chạy file `setup.exe`.
 2. Nếu Windows SmartScreen hiện cảnh báo, chọn **More info** → **Run anyway**.
@@ -144,13 +144,13 @@ npm run tauri dev
 ## Hướng dẫn sử dụng
 
 1. **Thêm tài khoản:** Bấm nút **+ Thêm tài khoản** ở thẻ Telemetry. Google Chrome sẽ tự động mở trang đăng nhập Google OAuth. App không bao giờ yêu cầu mật khẩu của bạn.
-2. **Theo dõi hạn mức:** Quota của từng model hiển thị trực tiếp trên vòng đồng hồ SVG ở thẻ Active Hero. Hạn mức tự động làm mới hoặc bạn có thể bấm icon ⟳ để làm mới thủ công.
+2. **Theo dõi hạn mức:** Quota của từng model hiển thị trực tiếp trên vòng đồng hồ SVG ở thẻ Active Hero, kèm thời điểm lấy hạn mức lần cuối. Hạn mức tự động làm mới theo chu kỳ đã chọn hoặc bạn có thể bấm icon ⟳ để làm mới thủ công.
 3. **Chuyển đổi tài khoản:** 
    - Bấm nút **Chuyển sang tài khoản này** trên thẻ tài khoản dự phòng mong muốn.
    - Hoặc click chuột phải vào icon ứng dụng trên thanh Menu / Khay hệ thống và chọn tài khoản.
    - Switcher thoát Antigravity và Antigravity IDE nếu đang mở, ghi phiên mới vào Keychain và file phiên của Antigravity, rồi mở lại các app đó.
 4. **Bộ lọc & Tìm kiếm:** Sử dụng ô tìm kiếm (`⌘F`) để tra cứu nhanh email hoặc lọc nhanh theo gói cước (`Tất cả`, `PRO`, `ULTRA`, `FREE`).
-5. **Cài đặt hệ thống:** Bấm icon bánh răng ⚙ trên thanh tiêu đề để tùy biến ngôn ngữ, chế độ hiển thị Sáng/Tối, 12 bảng màu Bento và bật/tắt tự động kiểm tra hạn mức.
+5. **Cài đặt hệ thống:** Bấm icon bánh răng ⚙ trên thanh tiêu đề để tùy biến ngôn ngữ, chế độ hiển thị Sáng/Tối, 12 bảng màu Bento, bật/tắt tự động kiểm tra hạn mức và chọn chu kỳ 10–120 phút.
 
 ---
 

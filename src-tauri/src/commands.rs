@@ -257,6 +257,22 @@ pub fn get_auto_check_quota(state: State<'_, AppState>) -> Result<bool, String> 
 }
 
 #[tauri::command]
+pub fn get_auto_check_interval(state: State<'_, AppState>) -> Result<u64, String> {
+    let store = state.store.lock().map_err(|error| error.to_string())?;
+    Ok(store.read_auto_check_interval_minutes())
+}
+
+#[tauri::command]
+pub fn set_auto_check_interval(
+    interval_minutes: u64,
+    state: State<'_, AppState>,
+) -> Result<u64, String> {
+    let store = state.store.lock().map_err(|error| error.to_string())?;
+    store.write_auto_check_interval_minutes(interval_minutes)?;
+    Ok(store.read_auto_check_interval_minutes())
+}
+
+#[tauri::command]
 pub fn set_auto_check_quota(app: AppHandle, enabled: bool, state: State<'_, AppState>) -> Result<(), String> {
     {
         let store = state.store.lock().map_err(|error| error.to_string())?;

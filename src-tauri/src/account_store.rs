@@ -6,6 +6,17 @@ use std::path::Path;
 
 use crate::quota::QuotaRow;
 
+const DEFAULT_AUTO_CHECK_INTERVAL_MINUTES: u64 = 10;
+
+/// Keep 10, 20, ..., 120. Anything else falls back to the 10-minute default.
+pub fn normalize_auto_check_interval_minutes(minutes: u64) -> u64 {
+    if (10..=120).contains(&minutes) && minutes.is_multiple_of(10) {
+        minutes
+    } else {
+        DEFAULT_AUTO_CHECK_INTERVAL_MINUTES
+    }
+}
+
 pub trait TokenVault {
     fn save_refresh_token(&mut self, account_id: &str, refresh_token: &str) -> Result<(), String>;
     fn load_refresh_token(&self, account_id: &str) -> Result<String, String>;
@@ -86,6 +97,25 @@ impl<V: TokenVault> AccountStore<V> {
     pub fn write_auto_check_quota(&self, enabled: bool) -> Result<(), String> {
         let value = if enabled { "true" } else { "false" };
         fs::write(self.root_dir.join("auto-check-quota"), value).map_err(|error| error.to_string())
+    }
+
+    pub fn read_auto_check_interval_minutes(&self) -> u64 {
+        let Ok(raw_text) = fs::read_to_string(self.root_dir.join("auto-check-interval")) else {
+            return DEFAULT_AUTO_CHECK_INTERVAL_MINUTES;
+        };
+        let Ok(parsed_minutes) = raw_text.trim().parse::<u64>() else {
+            return DEFAULT_AUTO_CHECK_INTERVAL_MINUTES;
+        };
+        normalize_auto_check_interval_minutes(parsed_minutes)
+    }
+
+    pub fn write_auto_check_interval_minutes(&self, minutes: u64) -> Result<(), String> {
+        let saved_minutes = normalize_auto_check_interval_minutes(minutes);
+        fs::write(
+            self.root_dir.join("auto-check-interval"),
+            saved_minutes.to_string(),
+        )
+        .map_err(|error| error.to_string())
     }
 
     pub fn align_current_account(&mut self, refresh_token: Option<&str>) -> Result<(), String> {
@@ -333,6 +363,23 @@ mod tests {
         assert!(!store.read_auto_check_quota());
         store.write_auto_check_quota(true).unwrap();
         assert!(store.read_auto_check_quota());
+        let _ = fs::remove_dir_all(store.root_dir());
+    }
+
+    #[test]
+    fn auto_check_interval_keeps_multiples_of_ten_minutes() {
+        let store = temp_store();
+        assert_eq!(store.read_auto_check_interval_minutes(), 10);
+        store.write_auto_check_interval_minutes(10).unwrap();
+        assert_eq!(store.read_auto_check_interval_minutes(), 10);
+        store.write_auto_check_interval_minutes(120).unwrap();
+        assert_eq!(store.read_auto_check_interval_minutes(), 120);
+        store.write_auto_check_interval_minutes(15).unwrap();
+        assert_eq!(store.read_auto_check_interval_minutes(), 10);
+        store.write_auto_check_interval_minutes(0).unwrap();
+        assert_eq!(store.read_auto_check_interval_minutes(), 10);
+        store.write_auto_check_interval_minutes(130).unwrap();
+        assert_eq!(store.read_auto_check_interval_minutes(), 10);
         let _ = fs::remove_dir_all(store.root_dir());
     }
 }

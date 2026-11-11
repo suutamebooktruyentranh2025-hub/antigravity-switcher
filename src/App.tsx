@@ -14,7 +14,9 @@ import {
   relaunchAntigravity,
   setUiLocale,
   getAutoCheckQuota,
+  getAutoCheckInterval,
   setAutoCheckQuota,
+  setAutoCheckInterval,
   checkForUpdates,
   type UpdateCheckResult,
   startOAuthLogin,
@@ -33,6 +35,8 @@ import {
   type Locale,
   type MessageKey,
 } from "./locale";
+import { autoCheckIntervalOptions, normalizeAutoCheckInterval } from "./checkInterval";
+import { formatQuotaClock } from "./quotaFetched";
 import {
   countTiers,
   formatResetCountdown,
@@ -153,6 +157,19 @@ function storedQuotaWindow(): QuotaWindow {
   return saved === "weekly" ? "weekly" : "5h";
 }
 
+function QuotaFetchedLabel({ iso, now_ms, locale }: { iso: string | null; now_ms: number; locale: Locale }) {
+  const clock_text = formatQuotaClock(iso, now_ms);
+  if (!clock_text || !iso) {
+    return <span className="quota-fetched-label">{translate(locale, "quota_not_fetched")}</span>;
+  }
+  const relative_text = formatRelativeTime(Date.parse(iso), now_ms, locale);
+  return (
+    <span className="quota-fetched-label" title={iso}>
+      {translate(locale, "quota_fetched_at")}: <strong className="mono">{clock_text}</strong> ({relative_text})
+    </span>
+  );
+}
+
 export function App() {
   const [accounts, setAccounts] = useState<AccountRecord[]>([]);
   const [current_account_id, setCurrentAccountId] = useState<string | null>(null);
@@ -177,13 +194,13 @@ export function App() {
   const [oauth_failed, setOauthFailed] = useState(false);
   const [delete_target, setDeleteTarget] = useState<AccountRecord | null>(null);
   const [auto_check_quota, setAutoCheckQuotaState] = useState(true);
+  const [auto_check_interval_minutes, setAutoCheckIntervalMinutes] = useState(10);
   const [update_info, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [checking_update, setCheckingUpdate] = useState(false);
   const [update_check_notice, setUpdateCheckNotice] = useState<string | null>(null);
   const [now_ms, setNowMs] = useState(() => Date.now());
   const [view_mode, setViewMode] = useState<ViewMode>(() => readViewMode(localStorage.getItem(VIEW_MODE_STORAGE_KEY)));
   const [hero_copied, setHeroCopied] = useState(false);
-  const [last_checked_time, setLastCheckedTime] = useState<number>(() => Date.now());
   const search_input_ref = useRef<HTMLInputElement>(null);
   const oauth_active_ref = useRef(false);
   const oauth_finishing_ref = useRef(false);
@@ -193,7 +210,6 @@ export function App() {
     const list = await listAccounts();
     setAccounts(list.accounts);
     setCurrentAccountId(list.current_account_id);
-    setLastCheckedTime(Date.now());
   }
 
   async function onCopyHeroEmail(email: string) {
@@ -233,6 +249,7 @@ export function App() {
   useEffect(() => {
     void readAppVersion().then(setAppVersion);
     void getAutoCheckQuota().then(setAutoCheckQuotaState);
+    void getAutoCheckInterval().then((minutes) => setAutoCheckIntervalMinutes(normalizeAutoCheckInterval(minutes)));
     void checkForUpdates().then((res) => {
       if (res.has_update) {
         setUpdateInfo(res);
@@ -365,7 +382,6 @@ export function App() {
     try {
       const next_accounts = await refreshAllAccounts();
       setAccounts(next_accounts);
-      setLastCheckedTime(Date.now());
     } finally {
       setRefreshingId(null);
     }
@@ -376,7 +392,6 @@ export function App() {
     try {
       const updated = await refreshAccount(account_id);
       setAccounts((current) => current.map((account) => (account.id === updated.id ? updated : account)));
-      setLastCheckedTime(Date.now());
     } finally {
       setRefreshingId(null);
     }
@@ -385,6 +400,13 @@ export function App() {
   async function onToggleAutoCheck(enabled: boolean) {
     setAutoCheckQuotaState(enabled);
     await setAutoCheckQuota(enabled);
+  }
+
+  async function onChangeCheckInterval(raw_minutes: number) {
+    const saved_minutes = normalizeAutoCheckInterval(raw_minutes);
+    setAutoCheckIntervalMinutes(saved_minutes);
+    const stored_minutes = await setAutoCheckInterval(saved_minutes);
+    setAutoCheckIntervalMinutes(normalizeAutoCheckInterval(stored_minutes));
   }
 
   async function onManualCheckUpdates() {
@@ -512,6 +534,7 @@ export function App() {
                 {!is_current ? <span className="reserve-badge">{t("reserve_account")}</span> : null}
                 {account.needs_relogin ? <span className="warn-badge">{t("relogin")}</span> : null}
               </div>
+              <QuotaFetchedLabel iso={account.quota_refreshed_at} now_ms={now_ms} locale={locale} />
             </div>
           </div>
           <div className="bento-card-header-actions">
@@ -609,6 +632,7 @@ export function App() {
               {account.tier ? <span className={`tier-badge ${account.tier.toLowerCase()}`}>{account.tier === "FREE" ? "FREE" : account.tier}</span> : null}
               {has_warning ? <span className="warn-badge" title={t("needs_attention")}>⚠️</span> : null}
             </div>
+            <QuotaFetchedLabel iso={account.quota_refreshed_at} now_ms={now_ms} locale={locale} />
           </div>
         </div>
 
@@ -728,7 +752,7 @@ export function App() {
                   </button>
                 </div>
                 <div className="bento-meta-row">
-                  <span>{t("auto_updated")}: <strong>{formatRelativeTime(last_checked_time, now_ms, locale)}</strong></span>
+                  <QuotaFetchedLabel iso={current_account.quota_refreshed_at} now_ms={now_ms} locale={locale} />
                 </div>
               </div>
 
@@ -807,7 +831,7 @@ export function App() {
               </div>
               <div className="bento-metric-row">
                 <span className="bento-metric-label">{t("auto_check_quota")}</span>
-                <span className="bento-metric-value mono">60m</span>
+                <span className="bento-metric-value mono">{auto_check_interval_minutes}m</span>
               </div>
               <div className="bento-metric-row">
                 <span className="bento-metric-label">{t("available_accounts")}</span>
@@ -965,14 +989,29 @@ export function App() {
                           </div>
                           <p className="settings-card-desc">{t("auto_check_quota_desc")}</p>
                         </div>
-                        <label className="toggle-switch">
-                          <input
-                            type="checkbox"
-                            checked={auto_check_quota}
-                            onChange={(event) => void onToggleAutoCheck(event.target.checked)}
-                          />
-                          <span className="toggle-slider" />
-                        </label>
+                        <div className="settings-check-controls">
+                          <select
+                            className="settings-interval-select"
+                            aria-label={t("auto_check_interval")}
+                            disabled={!auto_check_quota}
+                            value={auto_check_interval_minutes}
+                            onChange={(event) => void onChangeCheckInterval(Number(event.target.value))}
+                          >
+                            {autoCheckIntervalOptions().map((minutes) => (
+                              <option key={minutes} value={minutes}>
+                                {t("interval_minutes", { minutes: String(minutes) })}
+                              </option>
+                            ))}
+                          </select>
+                          <label className="toggle-switch">
+                            <input
+                              type="checkbox"
+                              checked={auto_check_quota}
+                              onChange={(event) => void onToggleAutoCheck(event.target.checked)}
+                            />
+                            <span className="toggle-slider" />
+                          </label>
+                        </div>
                       </div>
                     </div>
 

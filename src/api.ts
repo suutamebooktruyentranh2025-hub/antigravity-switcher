@@ -203,6 +203,23 @@ export async function setAutoCheckQuota(enabled: boolean): Promise<void> {
   return invoke("set_auto_check_quota", { enabled });
 }
 
+let preview_check_interval = 10;
+
+export async function getAutoCheckInterval(): Promise<number> {
+  if (!tauriReady()) {
+    return preview_check_interval;
+  }
+  return invoke<number>("get_auto_check_interval");
+}
+
+export async function setAutoCheckInterval(interval_minutes: number): Promise<number> {
+  if (!tauriReady()) {
+    preview_check_interval = interval_minutes;
+    return preview_check_interval;
+  }
+  return invoke<number>("set_auto_check_interval", { intervalMinutes: interval_minutes });
+}
+
 export interface UpdateCheckResult {
   has_update: boolean;
   current_version: string;

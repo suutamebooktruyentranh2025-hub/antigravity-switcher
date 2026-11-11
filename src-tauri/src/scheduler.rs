@@ -21,10 +21,19 @@ pub fn start_hourly_quota_worker(app: AppHandle) {
         check_and_refresh_current_account(&app);
 
         loop {
-            std::thread::sleep(Duration::from_secs(3600));
+            std::thread::sleep(auto_check_wait(&app));
             check_and_refresh_current_account(&app);
         }
     });
+}
+
+fn auto_check_wait(app: &AppHandle) -> Duration {
+    let state = app.state::<AppState>();
+    let minutes = match state.store.lock() {
+        Ok(store) => store.read_auto_check_interval_minutes(),
+        Err(_) => 10,
+    };
+    Duration::from_secs(minutes.saturating_mul(60))
 }
 
 pub fn check_ide_account_change(app: &AppHandle) {

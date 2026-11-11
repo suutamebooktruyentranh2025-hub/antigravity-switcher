@@ -39,6 +39,8 @@ pub fn run() {
             commands::set_ui_locale,
             commands::get_auto_check_quota,
             commands::set_auto_check_quota,
+            commands::get_auto_check_interval,
+            commands::set_auto_check_interval,
             commands::check_for_updates,
             commands::download_update,
             commands::install_update_and_relaunch
